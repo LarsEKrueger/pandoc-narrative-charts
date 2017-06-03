@@ -28,6 +28,11 @@ import Text.Pandoc.JSON as J
 import Text.Pandoc.Walk
 import Data.Map.Lazy as M
 
+import qualified Text.Blaze.Svg11 as S
+import qualified Text.Blaze.Svg11.Attributes as A
+import Text.Blaze.Svg.Renderer.Utf8
+import qualified Data.ByteString.Lazy as B
+
 newtype WhoIdentifier = WhoIdentifier String
 newtype WhenIdentifier = WhenIdentifier String
 newtype WhereIdentifier = WhereIdentifier String
@@ -58,6 +63,21 @@ data WhereProperties = WhereProperties
   }
 
 type WhereMap = M.Map WhereIdentifier WhereProperties
+
+type PlotProperties = M.Map String String
+
+renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> B.ByteString
+renderPlot pProp whoMap whenMap whereMap events = renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
+
+toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> S.Svg
+toPlotSvg pProp whoMap whenMap whereMap events =
+  S.docTypeSvg S.! A.version (S.toValue "1.1") S.! A.width (S.toValue "150") S.! A.height (S.toValue "100") $ do
+    S.path S.! A.d makeSimplePath
+
+makeSimplePath :: S.AttributeValue
+makeSimplePath =  S.mkPath $ do
+  S.l 2 3
+  S.m 4 5
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"

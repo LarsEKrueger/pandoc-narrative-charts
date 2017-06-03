@@ -24,6 +24,8 @@ executable pandoc-story-timeline
                        bytestring == 0.10.*,
                        aeson == 1.0.*,
                        pandoc == 1.19.*,
-                       containers == 0.5.*
+                       containers == 0.5.*,
+                       blaze-svg == 0.3.*,
+                       blaze-markup == 0.7.*
   hs-source-dirs:      src
   default-language:    Haskell2010
