@@ -55,18 +55,21 @@ type StoryEvents = [StoryEvent]
 data WhoProperties = WhoProperties
   { whoName :: String
   , whoColor :: String
+  , whoKey :: Int
   }
 
 type WhoMap = M.Map WhoIdentifier WhoProperties
 
 data WhenProperties = WhenProperties
   { whenName :: String
+  , whenKey :: Int
   }
 
 type WhenMap = M.Map WhenIdentifier WhenProperties
 
 data WhereProperties = WhereProperties
   { whereName :: String
+  , whereKey :: Int
   }
 
 type WhereMap = M.Map WhereIdentifier WhereProperties
@@ -204,23 +207,26 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whenMap = foldl' (\m when -> M.alter (alterWhen when) when m) whenMap' $ map evWhen events
   whereMap = foldl' (\m here -> M.alter (alterWhere here) here m) whereMap' $ map evWhere events
 
-  whenPos = M.fromList $ zip (M.keys whenMap) [0::Int ..]
-  wherePos = M.fromList $ zip (M.keys whereMap) [0::Int ..]
-  whoKeys = M.keys whoMap
-  whenLabels = map (\k -> whenName $ whenMap M.! k) $ M.keys whenMap
-  whereLabels = map (\k -> whereName $ whereMap M.! k) $ M.keys whereMap
+  whoKeys = map snd $ sortOn fst $ map (\(k,v) -> (whoKey v,k)) $ M.assocs whoMap
+  whenKeys = map snd $ sortOn fst $ map (\(k,v) -> (whenKey v,k)) $ M.assocs whenMap
+  whereKeys = map snd $ sortOn fst $ map (\(k,v) -> (whereKey v,k)) $ M.assocs whereMap
+
+  whenPos = M.fromList $ zip whenKeys [0::Int ..]
+  wherePos = M.fromList $ zip whereKeys [0::Int ..]
+  whenLabels = map (\k -> whenName $ whenMap M.! k) whenKeys
+  whereLabels = map (\k -> whereName $ whereMap M.! k) whereKeys
 
 
 alterWho :: WhoIdentifier -> Maybe WhoProperties -> Maybe WhoProperties
-alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black" }
+alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black", whoKey = 1 }
 alterWho _ x = x
 
 alterWhen :: WhenIdentifier -> Maybe WhenProperties -> Maybe WhenProperties
-alterWhen (WhenIdentifier when) Nothing = Just WhenProperties { whenName = when}
+alterWhen (WhenIdentifier when) Nothing = Just WhenProperties { whenName = when, whenKey = 1}
 alterWhen _ x = x
 
 alterWhere :: WhereIdentifier -> Maybe WhereProperties -> Maybe WhereProperties
-alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here}
+alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here, whereKey = 1}
 alterWhere _ x = x
 
 
@@ -232,53 +238,53 @@ makeSimplePath =  S.mkPath $ do
 main :: IO ()
 main = do
   let pProp = M.empty
-      whoMap = M.fromList [(WhoIdentifier "hero", WhoProperties { whoName = "Hero", whoColor = "blue"})
-                          ,(WhoIdentifier "villain", WhoProperties { whoName = "Villain", whoColor = "red"})
+      whoMap = M.fromList [(WhoIdentifier "hero", WhoProperties { whoName = "Hero", whoColor = "blue", whoKey = 1})
+                          ,(WhoIdentifier "villain", WhoProperties { whoName = "Villain", whoColor = "red", whoKey = 2})
                           ]
-      whenMap = M.fromList [(WhenIdentifier "01beginning", WhenProperties { whenName = "Beginning"})
-                           ,(WhenIdentifier "02kickoff", WhenProperties { whenName = "Kick-off"})
-                           ,(WhenIdentifier "03journey", WhenProperties { whenName = "The Journey"})
-                           ,(WhenIdentifier "04climax", WhenProperties { whenName = "Climax"})
-                           ,(WhenIdentifier "05ending", WhenProperties { whenName = "Fin"})
+      whenMap = M.fromList [(WhenIdentifier "beginning", WhenProperties { whenName = "Beginning", whenKey = 1})
+                           ,(WhenIdentifier "kickoff", WhenProperties { whenName = "Kick-off", whenKey = 2})
+                           ,(WhenIdentifier "journey", WhenProperties { whenName = "The Journey", whenKey = 3})
+                           ,(WhenIdentifier "climax", WhenProperties { whenName = "Climax", whenKey = 4})
+                           ,(WhenIdentifier "ending", WhenProperties { whenName = "Fin", whenKey = 5})
                            ]
-      whereMap = M.fromList [(WhereIdentifier "01home", WhereProperties { whereName = "Home"})
-                            ,(WhereIdentifier "03street", WhereProperties { whereName = "A Dirty Street"})
-                            ,(WhereIdentifier "02road", WhereProperties { whereName = "A Lonely Road"})
-                            ,(WhereIdentifier "05valley", WhereProperties { whereName = "The Valley"})
-                            ,(WhereIdentifier "06fortess", WhereProperties { whereName = "Evil Fortress"})
+      whereMap = M.fromList [(WhereIdentifier "home", WhereProperties { whereName = "Home", whereKey = 1})
+                            ,(WhereIdentifier "street", WhereProperties { whereName = "A Dirty Street", whereKey = 3})
+                            ,(WhereIdentifier "road", WhereProperties { whereName = "A Lonely Road", whereKey = 2})
+                            ,(WhereIdentifier "valley", WhereProperties { whereName = "The Valley", whereKey = 5})
+                            ,(WhereIdentifier "fortress", WhereProperties { whereName = "Evil Fortress", whereKey = 6})
                             ]
       events =
         [ StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "01beginning"
-          , evWhere = WhereIdentifier "01home"
+          , evWhen = WhenIdentifier "beginning"
+          , evWhere = WhereIdentifier "home"
           }
         , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "05ending"
-          , evWhere = WhereIdentifier "06fortess"
+          , evWhen = WhenIdentifier "ending"
+          , evWhere = WhereIdentifier "fortress"
           }
         , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "01beginning"
-          , evWhere = WhereIdentifier "06fortess"
+          , evWhen = WhenIdentifier "beginning"
+          , evWhere = WhereIdentifier "fortress"
           }
         , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "02kickoff"
-          , evWhere = WhereIdentifier "03street"
+          , evWhen = WhenIdentifier "kickoff"
+          , evWhere = WhereIdentifier "street"
           }
         , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "02kickoff"
-          , evWhere = WhereIdentifier "03street"
+          , evWhen = WhenIdentifier "kickoff"
+          , evWhere = WhereIdentifier "street"
           }
         , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "03journey"
-          , evWhere = WhereIdentifier "02road"
+          , evWhen = WhenIdentifier "journey"
+          , evWhere = WhereIdentifier "road"
           }
         , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "04climax"
-          , evWhere = WhereIdentifier "05valley"
+          , evWhen = WhenIdentifier "climax"
+          , evWhere = WhereIdentifier "valley"
           }
         , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "04climax"
-          , evWhere = WhereIdentifier "05valley"
+          , evWhen = WhenIdentifier "climax"
+          , evWhere = WhereIdentifier "valley"
           }
         ]
   B.writeFile "plot.svg" $ renderPlot pProp whoMap whenMap whereMap events
