@@ -1,53 +1,53 @@
 # Simple test page to generate a narrative plot
 
-```narcha event
+```narcha-event
 who: hero
 when: beginning
 where: home
 ```
 
-```narcha event
+```narcha-event
 who : hero
 when : ending
 where : fortess
 ```
 
-```narcha event
+```narcha-event
 who : villain
 when : beginning
 where : fortess
 ```
 
-```narcha event
+```narcha-event
 who : hero
 when : kickoff
 where : street
 ```
 
-```narcha event
+```narcha-event
 who : villain
 when : kickoff
 where : street
 ```
 
-```narcha event
+```narcha-event
 who : hero
 when : journey
 where : road
 ```
 
-```narcha event
+```narcha-event
 who : hero
 when : climax
 where : valley
 ```
 
-```narcha event
+```narcha-event
 who : villain
 when : climax
 where : valley
 ```
 
-```narcha plot
+```narcha-plot
 
 ```
