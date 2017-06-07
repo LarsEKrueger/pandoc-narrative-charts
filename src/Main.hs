@@ -142,7 +142,34 @@ instance FromJSON WhereIdProp where
     <*> v .: "key"
   parseJSON invalid    = typeMismatch "WhereIdProp" invalid
 
-type PlotProperties = M.Map String String
+data PlotProperties = PlotProperties
+  { ppAxisColor :: String
+  , ppTop :: Int
+  , ppBottom :: Int
+  , ppLeft :: Int
+  , ppRight :: Int
+  , ppArrowGap :: Int
+  , ppGridW :: Int
+  , ppNameHeight :: Int
+  , ppNameEdge :: Int
+  , ppNameLen :: Int
+  , ppNameGap :: Int
+  }
+
+instance FromJSON PlotProperties where
+  parseJSON (Object v) = PlotProperties
+    <$> v .:? "axisColor" .!= "black"
+    <*> v .:? "top" .!= 20
+    <*> v .:? "bottom" .!= 100
+    <*> v .:? "left" .!= 100
+    <*> v .:? "right" .!= 50
+    <*> v .:? "arrowGap" .!= 10
+    <*> v .:? "eventGrid" .!= 50
+    <*> v .:? "nameHeight" .!= 10
+    <*> v .:? "nameEdge" .!= 1
+    <*> v .:? "nameLen" .!= 50
+    <*> v .:? "nameGap" .!= 1
+  parseJSON invalid    = typeMismatch "PlotProperties" invalid
 
 data Global = Global
   { gWhoMap :: WhoMap
@@ -179,7 +206,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   S.docTypeSvg
     ! A.version "1.1"
     ! A.width (S.toValue $ left + whoNameSkip + gridW * (nWhen - 1) + right)
-    ! A.height (S.toValue $ top + gridH * (nWhere - 1) + bottom)
+    ! A.height (S.toValue $ top + gridH * nWhere + bottom)
     $ do
       S.defs $ do
         S.marker ! A.id_ "arrowTip"
@@ -187,7 +214,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.markerheight (S.toValue (10 :: Int))
           ! A.refx (S.toValue (0 :: Int))
           ! A.refy (S.toValue (5 :: Int)) $
-            S.path ! A.fill "black" ! A.d (S.mkPath $ do
+            S.path ! A.fill (S.toValue $ ppAxisColor pProp) ! A.d (S.mkPath $ do
               S.m 0 0
               S.l 0 10
               S.l 10 5
@@ -197,7 +224,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.markerheight (S.toValue (10 :: Int))
           ! A.refx (S.toValue (0 :: Int))
           ! A.refy (S.toValue (5 :: Int)) $
-            S.path ! A.stroke "black" ! A.d (S.mkPath $ do
+            S.path ! A.stroke (S.toValue $ ppAxisColor pProp) ! A.d (S.mkPath $ do
               S.m 0 0
               S.l 0 10)
         S.marker ! A.id_ "eventMark"
@@ -206,14 +233,14 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.markerunits "userSpaceOnUse"
           ! A.refx (S.toValue (whoStep `div` 2))
           ! A.refy (S.toValue (whoStep `div` 2)) $
-            S.circle ! A.stroke "black"
+            S.circle ! A.stroke (S.toValue $ ppAxisColor pProp)
             ! A.fill "white"
             ! A.strokeWidth (S.toValue $ whoStep - lineWidth)
             ! A.cx (S.toValue (whoStep `div` 2))
             ! A.cy (S.toValue (whoStep `div` 2))
             ! A.r (S.toValue (whoStep `div` 2))
 
-      S.path ! A.stroke "black"
+      S.path ! A.stroke (S.toValue $ ppAxisColor pProp)
         ! A.markerEnd "url(#arrowTip)"
         ! A.markerMid "url(#arrowMark)"
         ! A.markerStart "url(#arrowMark)"
@@ -229,9 +256,10 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
         S.text_
           ! A.x (S.toValue x)
           ! A.y (S.toValue y)
-          ! A.fill "black"
+          ! A.fill (S.toValue $ ppAxisColor pProp)
           ! A.fontSize (S.toValue $ show lineWidth ++ "px")
           ! A.textAnchor "end"
+          ! A.dominantBaseline "middle"
           ! A.transform (S.rotateAround (-45) x y)
           $ S.text (T.pack $ whenName $ whenMap M.! kWhen)
       forM_ whereKeys $ \kWhere -> do
@@ -240,9 +268,10 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
         S.text_
           ! A.x (S.toValue x)
           ! A.y (S.toValue y)
-          ! A.fill "black"
+          ! A.fill (S.toValue $ ppAxisColor pProp)
           ! A.fontSize (S.toValue $ show lineWidth ++ "px")
           ! A.textAnchor "end"
+          ! A.dominantBaseline "middle"
           ! A.transform ( S.rotateAround (-45) x y)
           $ S.text (T.pack $ whereName $ whereMap M.! kWhere)
       forM_ whoKeys $ \kWho -> do
@@ -269,33 +298,37 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
                          (left + whoNameSkip + xi * gridW) (top + yi * gridH + whoStep * iWho)
                    )
                S.rect
-                 ! A.x (S.toValue $ firstX + 1)
+                 ! A.x (S.toValue $ firstX + whoNameGap)
                  ! A.y (S.toValue $ firstY - whoNameHeight `div` 2)
                  ! A.width (S.toValue whoNameLen)
                  ! A.height (S.toValue whoNameHeight)
                  ! A.stroke "none"
                  ! A.fill "white"
                S.text_
-                 ! A.x (S.toValue $ firstX + 2)
+                 ! A.x (S.toValue $ firstX + whoNameGap + whoNameLen `div` 2)
                  ! A.y (S.toValue firstY)
-                 ! A.fill "black"
+                 ! A.fill (S.toValue $ ppAxisColor pProp)
                  ! A.fontSize (S.toValue (show whoNameHeight ++ "px"))
                  ! A.dominantBaseline "middle"
+                 ! A.textAnchor "middle"
                  $ S.text (T.pack $ whoName $ whoMap M.! kWho)
   where
-  top = 20
-  bottom = 100
-  left = 100
-  right = 50
-  arrowGap = 10
-  gridW = 50
-  whoNameHeight = 6
-  lineWidth = whoNameHeight + 2
-  whoNameLen = 30
-  whoNameSkip = whoNameLen + 10
+  top = 0 `max` ppTop pProp
+  bottom = 0 `max` ppBottom pProp
+  left = 0 `max` ppLeft pProp
+  right = 0 `max` ppRight pProp
+  arrowGap = 1 `max` ppArrowGap pProp
+  gridW = 10 `max` ppGridW pProp
+  whoNameHeight = 5 `max` ppNameHeight pProp
+  whoNameEdge1 = 1 `max` ppNameEdge pProp
+  whoNameLen = 10 `max` ppNameLen pProp
+  whoNameGap = 1 `max` ppNameGap pProp
+  whoNameEdge = 2 * whoNameEdge1
+  whoNameSkip = whoNameLen + 2 * whoNameGap + lineWidth
+  lineWidth = whoNameHeight + whoNameEdge
   whoStep = lineWidth + 2
   gridH = whoStep * (nWho + 2)
-  textOffs = 20
+  textOffs = lineWidth `div` 2
   nWho = M.size whoMap
   nWhen = M.size whenMap
   nWhere = M.size whereMap
@@ -352,10 +385,13 @@ processEvents globalRef b@(CodeBlock (_,["narcha-when"],_) cont) =
 processEvents _ b = return b
 
 processPlots :: IORef Global -> Block -> IO Block
-processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) = do
-  global <- readIORef globalRef
-  let svg = renderPlot M.empty (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
-  return $ RawBlock "HTML" $ C.unpack svg
+processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
+  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+       Right (pp@PlotProperties{}) -> do
+         global <- readIORef globalRef
+         let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
+         return $ RawBlock "HTML" $ C.unpack svg
+       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
 
 main :: IO ()
