@@ -38,7 +38,6 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as C
 import Data.List
 import Control.Monad (forM_)
-import qualified Data.Text as T
 import Data.Default
 import Data.IORef
 import Data.Aeson
@@ -81,24 +80,67 @@ type StoryEvents = [StoryEvent]
 data WhoProperties = WhoProperties
   { whoName :: String
   , whoColor :: String
-  , whoKey :: Int
+  , whoKey :: String
   }
 
 type WhoMap = M.Map WhoIdentifier WhoProperties
 
+data WhoIdProp = WhoIdProp WhoIdentifier WhoProperties
+
+mkWhoIdProp :: T.Text -> T.Text -> T.Text -> T.Text -> WhoIdProp
+mkWhoIdProp ident name color key =
+  WhoIdProp (WhoIdentifier $ T.unpack ident)
+            (WhoProperties (T.unpack name) (T.unpack color) (T.unpack key))
+
+instance FromJSON WhoIdProp where
+  parseJSON (Object v) = mkWhoIdProp
+    <$> v .: "id"
+    <*> v .: "name"
+    <*> v .: "color"
+    <*> v .: "key"
+  parseJSON invalid    = typeMismatch "WhoIdProp" invalid
+
+
 data WhenProperties = WhenProperties
   { whenName :: String
-  , whenKey :: Int
+  , whenKey :: String
   }
 
 type WhenMap = M.Map WhenIdentifier WhenProperties
 
+data WhenIdProp = WhenIdProp WhenIdentifier WhenProperties
+
+mkWhenIdProp :: T.Text -> T.Text -> T.Text -> WhenIdProp
+mkWhenIdProp ident name key =
+  WhenIdProp (WhenIdentifier $ T.unpack ident)
+            (WhenProperties (T.unpack name) (T.unpack key))
+
+instance FromJSON WhenIdProp where
+  parseJSON (Object v) = mkWhenIdProp
+    <$> v .: "id"
+    <*> v .: "name"
+    <*> v .: "key"
+  parseJSON invalid    = typeMismatch "WhenIdProp" invalid
+
+
 data WhereProperties = WhereProperties
   { whereName :: String
-  , whereKey :: Int
+  , whereKey :: String
   }
 
 type WhereMap = M.Map WhereIdentifier WhereProperties
+
+data WhereIdProp = WhereIdProp WhereIdentifier WhereProperties
+
+mkWhereIdProp :: T.Text -> T.Text -> T.Text -> WhereIdProp
+mkWhereIdProp ident name key = WhereIdProp (WhereIdentifier $ T.unpack ident) (WhereProperties (T.unpack name) (T.unpack key))
+
+instance FromJSON WhereIdProp where
+  parseJSON (Object v) = mkWhereIdProp
+    <$> v .: "id"
+    <*> v .: "name"
+    <*> v .: "key"
+  parseJSON invalid    = typeMismatch "WhereIdProp" invalid
 
 type PlotProperties = M.Map String String
 
@@ -116,6 +158,15 @@ instance Default Global where
         , gWhereMap = M.empty
         , gEvents = []
         }
+
+globalAddWho :: WhoIdentifier -> WhoProperties -> Global -> Global
+globalAddWho ident prop g = g { gWhoMap = M.insert ident prop $ gWhoMap g }
+
+globalAddWhen :: WhenIdentifier -> WhenProperties -> Global -> Global
+globalAddWhen ident prop g = g { gWhenMap = M.insert ident prop $ gWhenMap g }
+
+globalAddWhere :: WhereIdentifier -> WhereProperties -> Global -> Global
+globalAddWhere ident prop g = g { gWhereMap = M.insert ident prop $ gWhereMap g }
 
 globalAddEvent :: StoryEvent -> Global -> Global
 globalAddEvent e g = g { gEvents = e : gEvents g }
@@ -172,8 +223,8 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
             S.l (left + whoNameSkip + i * gridW) (top + nWhere * gridH)
           S.l (left + whoNameSkip + (nWhen - 1) * gridW + arrowGap) (top + nWhere * gridH)
           )
-      forM_ (zip whenLabels [0..(nWhen-1)]) $ \(label,i) -> do
-        let x = left + whoNameSkip + i * gridW
+      forM_ whenKeys $ \kWhen -> do
+        let x = left + whoNameSkip + (whenPos M.! kWhen) * gridW
             y = top + nWhere * gridH + textOffs
         S.text_
           ! A.x (S.toValue x)
@@ -182,10 +233,10 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.fontSize (S.toValue $ show lineWidth ++ "px")
           ! A.textAnchor "end"
           ! A.transform (S.rotateAround (-45) x y)
-          $ S.text (T.pack label)
-      forM_ (zip whereLabels [0..(nWhere-1)]) $ \(label,i) -> do
+          $ S.text (T.pack $ whenName $ whenMap M.! kWhen)
+      forM_ whereKeys $ \kWhere -> do
         let x = left - textOffs
-            y = top + i * gridH
+            y = top + (wherePos M.! kWhere) * gridH
         S.text_
           ! A.x (S.toValue x)
           ! A.y (S.toValue y)
@@ -193,12 +244,13 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.fontSize (S.toValue $ show lineWidth ++ "px")
           ! A.textAnchor "end"
           ! A.transform ( S.rotateAround (-45) x y)
-          $ S.text (T.pack label)
-      forM_ (zip whoKeys [0..(nWho-1)]) $ \(kWho,iWho) -> do
-        let kEvents = filter ((== kWho) . evWho) events
-            xEv = map ((whenPos M.!) . evWhen) kEvents
-            yEv = map ((wherePos M.!) . evWhere) kEvents
-        case sortOn fst $ zip xEv yEv of
+          $ S.text (T.pack $ whereName $ whereMap M.! kWhere)
+      forM_ whoKeys $ \kWho -> do
+        let whoEvents = filter ((== kWho) . evWho) events
+            iWho = whoPos M.! kWho
+            xWho = map ((whenPos M.!) . evWhen) whoEvents
+            yWho = map ((wherePos M.!) . evWhere) whoEvents
+        case sortOn fst $ zip xWho yWho of
              [] -> S.text (T.pack "")
              allXys@((x1,y1):xys) -> do
                let firstX = left + x1 * gridW
@@ -251,33 +303,50 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whenMap = foldl' (\m when -> M.alter (alterWhen when) when m) whenMap' $ map evWhen events
   whereMap = foldl' (\m here -> M.alter (alterWhere here) here m) whereMap' $ map evWhere events
 
-  whoKeys = map snd $ sortOn fst $ map (\(k,v) -> (whoKey v,k)) $ M.assocs whoMap
-  whenKeys = map snd $ sortOn fst $ map (\(k,v) -> (whenKey v,k)) $ M.assocs whenMap
-  whereKeys = map snd $ sortOn fst $ map (\(k,v) -> (whereKey v,k)) $ M.assocs whereMap
+  whoKeys = map fst $ sortOn (whoKey . snd) $ M.assocs whoMap
+  whenKeys = map fst $ sortOn (whenKey . snd) $ M.assocs whenMap
+  whereKeys = map fst $ sortOn (whereKey . snd) $ M.assocs whereMap
 
+  whoPos = M.fromList $ zip whoKeys [0::Int ..]
   whenPos = M.fromList $ zip whenKeys [0::Int ..]
   wherePos = M.fromList $ zip whereKeys [0::Int ..]
-  whenLabels = map (\k -> whenName $ whenMap M.! k) whenKeys
-  whereLabels = map (\k -> whereName $ whereMap M.! k) whereKeys
 
 
 alterWho :: WhoIdentifier -> Maybe WhoProperties -> Maybe WhoProperties
-alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black", whoKey = 1 }
+alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black", whoKey = who }
 alterWho _ x = x
 
 alterWhen :: WhenIdentifier -> Maybe WhenProperties -> Maybe WhenProperties
-alterWhen (WhenIdentifier when) Nothing = Just WhenProperties { whenName = when, whenKey = 1}
+alterWhen (WhenIdentifier when) Nothing = Just WhenProperties { whenName = when, whenKey = when}
 alterWhen _ x = x
 
 alterWhere :: WhereIdentifier -> Maybe WhereProperties -> Maybe WhereProperties
-alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here, whereKey = 1}
+alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here, whereKey = here}
 alterWhere _ x = x
 
 processEvents :: IORef Global -> Block -> IO Block
-processEvents globalRef b@(CodeBlock (_,["narcha-event"],_) cont) = do
+processEvents globalRef b@(CodeBlock (_,["narcha-event"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
        Right (e@StoryEvent{}) -> do
          modifyIORef' globalRef (globalAddEvent e)
+         return Text.Pandoc.Definition.Null
+       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+processEvents globalRef b@(CodeBlock (_,["narcha-where"],_) cont) =
+  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+       Right (WhereIdProp id prop) -> do
+         modifyIORef' globalRef (globalAddWhere id prop)
+         return Text.Pandoc.Definition.Null
+       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+processEvents globalRef b@(CodeBlock (_,["narcha-who"],_) cont) =
+  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+       Right (WhoIdProp id prop) -> do
+         modifyIORef' globalRef (globalAddWho id prop)
+         return Text.Pandoc.Definition.Null
+       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+processEvents globalRef b@(CodeBlock (_,["narcha-when"],_) cont) =
+  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+       Right (WhenIdProp id prop) -> do
+         modifyIORef' globalRef (globalAddWhen id prop)
          return Text.Pandoc.Definition.Null
        Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents _ b = return b
@@ -292,56 +361,6 @@ processPlots _ b = return b
 main :: IO ()
 main = do
   let pProp = M.empty
-      whoMap = M.fromList [(WhoIdentifier "hero", WhoProperties { whoName = "Hero", whoColor = "blue", whoKey = 1})
-                          ,(WhoIdentifier "villain", WhoProperties { whoName = "Villain", whoColor = "red", whoKey = 2})
-                          ]
-      whenMap = M.fromList [(WhenIdentifier "beginning", WhenProperties { whenName = "Beginning", whenKey = 1})
-                           ,(WhenIdentifier "kickoff", WhenProperties { whenName = "Kick-off", whenKey = 2})
-                           ,(WhenIdentifier "journey", WhenProperties { whenName = "The Journey", whenKey = 3})
-                           ,(WhenIdentifier "climax", WhenProperties { whenName = "Climax", whenKey = 4})
-                           ,(WhenIdentifier "ending", WhenProperties { whenName = "Fin", whenKey = 5})
-                           ]
-      whereMap = M.fromList [(WhereIdentifier "home", WhereProperties { whereName = "Home", whereKey = 1})
-                            ,(WhereIdentifier "street", WhereProperties { whereName = "A Dirty Street", whereKey = 3})
-                            ,(WhereIdentifier "road", WhereProperties { whereName = "A Lonely Road", whereKey = 2})
-                            ,(WhereIdentifier "valley", WhereProperties { whereName = "The Valley", whereKey = 5})
-                            ,(WhereIdentifier "fortress", WhereProperties { whereName = "Evil Fortress", whereKey = 6})
-                            ]
-      events =
-        [ StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "beginning"
-          , evWhere = WhereIdentifier "home"
-          }
-        , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "ending"
-          , evWhere = WhereIdentifier "fortress"
-          }
-        , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "beginning"
-          , evWhere = WhereIdentifier "fortress"
-          }
-        , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "kickoff"
-          , evWhere = WhereIdentifier "street"
-          }
-        , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "kickoff"
-          , evWhere = WhereIdentifier "street"
-          }
-        , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "journey"
-          , evWhere = WhereIdentifier "road"
-          }
-        , StoryEvent { evWho = WhoIdentifier "hero"
-          , evWhen = WhenIdentifier "climax"
-          , evWhere = WhereIdentifier "valley"
-          }
-        , StoryEvent { evWho = WhoIdentifier "villain"
-          , evWhen = WhenIdentifier "climax"
-          , evWhere = WhereIdentifier "valley"
-          }
-        ]
-  -- B.writeFile "plot.svg" $ renderPlot pProp whoMap whenMap whereMap events
   txt <- B.getContents
   let input = (either error id $ eitherDecode' txt) :: Pandoc
   globalRef <- newIORef def
