@@ -72,7 +72,7 @@ key: "3"
 
 ```narcha-where
 id: road
-name: A Lonely Road
+name: A Lonely Roäd
 key: "2"
 ```
 
@@ -90,7 +90,7 @@ key: "5"
 
 ```narcha-who
 id: hero
-name: Our Hero
+name: Our Herö
 color: blue
 key: "5"
 ```
@@ -122,7 +122,7 @@ key: "3"
 
 ```narcha-when
 id: climax
-name: Climax
+name: Climäx
 key: "4"
 ```
 

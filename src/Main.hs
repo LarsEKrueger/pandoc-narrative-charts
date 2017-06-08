@@ -33,7 +33,7 @@ import qualified Data.Map.Lazy as M
 import Text.Blaze.Svg11 ((!), mkPath, rotate, l, m, z)
 import qualified Text.Blaze.Svg11 as S
 import qualified Text.Blaze.Svg11.Attributes as A
-import Text.Blaze.Svg.Renderer.Utf8 (renderSvg)
+import qualified Text.Blaze.Svg.Renderer.String as R
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as C
 import Data.List
@@ -198,8 +198,8 @@ globalAddWhere ident prop g = g { gWhereMap = M.insert ident prop $ gWhereMap g 
 globalAddEvent :: StoryEvent -> Global -> Global
 globalAddEvent e g = g { gEvents = e : gEvents g }
 
-renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> B.ByteString
-renderPlot pProp whoMap whenMap whereMap events = renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
+renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> String
+renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
 
 toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> S.Svg
 toPlotSvg pProp whoMap' whenMap' whereMap' events =
@@ -261,7 +261,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.textAnchor "end"
           ! A.dominantBaseline "middle"
           ! A.transform (S.rotateAround (-45) x y)
-          $ S.text (T.pack $ whenName $ whenMap M.! kWhen)
+          $ S.string (whenName $ whenMap M.! kWhen)
       forM_ whereKeys $ \kWhere -> do
         let x = left - textOffs
             y = top + (wherePos M.! kWhere) * gridH
@@ -273,14 +273,14 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.textAnchor "end"
           ! A.dominantBaseline "middle"
           ! A.transform ( S.rotateAround (-45) x y)
-          $ S.text (T.pack $ whereName $ whereMap M.! kWhere)
+          $ S.string (whereName $ whereMap M.! kWhere)
       forM_ whoKeys $ \kWho -> do
         let whoEvents = filter ((== kWho) . evWho) events
             iWho = whoPos M.! kWho
             xWho = map ((whenPos M.!) . evWhen) whoEvents
             yWho = map ((wherePos M.!) . evWhere) whoEvents
         case sortOn fst $ zip xWho yWho of
-             [] -> S.text (T.pack "")
+             [] -> S.string ""
              allXys@((x1,y1):xys) -> do
                let firstX = left + x1 * gridW
                    firstY = top + y1 * gridH + whoStep * iWho
@@ -311,7 +311,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
                  ! A.fontSize (S.toValue (show whoNameHeight ++ "px"))
                  ! A.dominantBaseline "middle"
                  ! A.textAnchor "middle"
-                 $ S.text (T.pack $ whoName $ whoMap M.! kWho)
+                 $ S.string (whoName $ whoMap M.! kWho)
   where
   top = 0 `max` ppTop pProp
   bottom = 0 `max` ppBottom pProp
@@ -390,7 +390,7 @@ processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
        Right (pp@PlotProperties{}) -> do
          global <- readIORef globalRef
          let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
-         return $ RawBlock "HTML" $ C.unpack svg
+         return $ RawBlock "HTML" svg
        Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
 
