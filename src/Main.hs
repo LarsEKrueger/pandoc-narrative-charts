@@ -55,12 +55,15 @@ newtype WhereIdentifier = WhereIdentifier String
 
 instance FromJSON WhoIdentifier where
   parseJSON (Y.String s) = WhoIdentifier <$> pure (T.unpack s)
+  parseJSON invalid    = typeMismatch "WhoIdentifier" invalid
 
 instance FromJSON WhenIdentifier where
   parseJSON (Y.String s) = WhenIdentifier <$> pure (T.unpack s)
+  parseJSON invalid    = typeMismatch "WhenIdentifier" invalid
 
 instance FromJSON WhereIdentifier where
   parseJSON (Y.String s) = WhereIdentifier <$> pure (T.unpack s)
+  parseJSON invalid    = typeMismatch "WhereIdentifier" invalid
 
 data StoryEvent = StoryEvent
   { evWho :: WhoIdentifier
