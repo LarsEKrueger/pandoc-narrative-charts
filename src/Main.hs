@@ -203,8 +203,7 @@ renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp 
 
 toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> S.Svg
 toPlotSvg pProp whoMap' whenMap' whereMap' events =
-  S.docTypeSvg
-    ! A.version "1.1"
+  S.svg
     ! A.width (S.toValue $ left + whoNameSkip + gridW * (nWhen - 1) + right)
     ! A.height (S.toValue $ top + gridH * nWhere + bottom)
     $ do
