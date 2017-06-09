@@ -120,7 +120,7 @@ axisColor: #666
 nameHeight: 20
 eventGrid: 100
 nameLen: 100
-left: 130
+left: 150
 bottom: 130
 ```
 

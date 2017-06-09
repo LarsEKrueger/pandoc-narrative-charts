@@ -29,6 +29,7 @@ executable pandoc-narrative-charts
                        blaze-markup == 0.7.*,
                        text == 1.2.*,
                        data-default == 0.7.*,
-                       yaml == 0.8.*
+                       yaml == 0.8.*,
+                       vector == 0.11.*
   hs-source-dirs:      src
   default-language:    Haskell2010

@@ -37,7 +37,7 @@ import qualified Text.Blaze.Svg.Renderer.String as R
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as C
 import Data.List
-import Control.Monad (forM_)
+import Control.Monad (forM_, forM)
 import Data.Default
 import Data.IORef
 import Data.Aeson
@@ -45,6 +45,8 @@ import Data.Aeson.Types
 import qualified Data.Yaml as Y
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Vector.Unboxed.Mutable as MV
+import Control.Monad.ST
 
 newtype WhoIdentifier = WhoIdentifier String
   deriving (Eq, Ord, Show)
@@ -70,6 +72,7 @@ data StoryEvent = StoryEvent
   , evWhen :: WhenIdentifier
   , evWhere :: WhereIdentifier
   }
+  deriving (Eq)
 
 instance FromJSON StoryEvent where
   parseJSON (Object v) = StoryEvent
@@ -208,7 +211,7 @@ toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> S
 toPlotSvg pProp whoMap' whenMap' whereMap' events =
   S.svg
     ! A.width (S.toValue $ left + whoNameSkip + gridW * (nWhen - 1) + right)
-    ! A.height (S.toValue $ top + gridH * nWhere + bottom)
+    ! A.height (S.toValue $ top + whereTotal * whoStep + bottom)
     $ do
       S.defs $ do
         S.marker ! A.id_ "arrowTip"
@@ -247,14 +250,15 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
         ! A.markerMid "url(#arrowMark)"
         ! A.markerStart "url(#arrowMark)"
         ! A.d (S.mkPath $ do
-          S.m (left + whoNameSkip) (top + nWhere * gridH)
+          let y = top + whereTotal * whoStep
+          S.m (left + whoNameSkip) y
           forM_ [0..(nWhen-1)] $ \i ->
-            S.l (left + whoNameSkip + i * gridW) (top + nWhere * gridH)
-          S.l (left + whoNameSkip + (nWhen - 1) * gridW + arrowGap) (top + nWhere * gridH)
+            S.l (left + whoNameSkip + i * gridW) y
+          S.l (left + whoNameSkip + (nWhen - 1) * gridW + arrowGap) y
           )
       forM_ whenKeys $ \kWhen -> do
         let x = left + whoNameSkip + (whenPos M.! kWhen) * gridW
-            y = top + nWhere * gridH + textOffs
+            y = top + whereTotal * whoStep + textOffs
         S.text_
           ! A.x (S.toValue x)
           ! A.y (S.toValue y)
@@ -264,56 +268,79 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.dominantBaseline "middle"
           ! A.transform (S.rotateAround (-45) x y)
           $ S.string (whenName $ whenMap M.! kWhen)
-      forM_ whereKeys $ \kWhere -> do
+      forM_ (zip4 whereKeys whereStart whereHeight $ cycle ["#ccc", "#eee"])$ \(kWhere,sWhere,hWhere,zebra) -> do
         let x = left - textOffs
-            y = top + (wherePos M.! kWhere) * gridH
-        S.text_
+            xt = x - lineWidth `div` 2
+            yt = top + sWhere * whoStep + whoStep `div` 2
+        S.rect
           ! A.x (S.toValue x)
-          ! A.y (S.toValue y)
+          ! A.y (S.toValue $ top + sWhere * whoStep - whoStep)
+          ! A.width (S.toValue $ left + whoNameSkip + gridW * (nWhen - 1))
+          ! A.height (S.toValue $ hWhere * whoStep)
+          ! A.stroke "none"
+          ! A.fill zebra
+        S.text_
+          ! A.x (S.toValue xt)
+          ! A.y (S.toValue yt)
           ! A.fill (S.toValue $ ppAxisColor pProp)
           ! A.fontSize (S.toValue $ show lineWidth ++ "px")
           ! A.textAnchor "end"
           ! A.dominantBaseline "middle"
-          ! A.transform ( S.rotateAround (-45) x y)
+          ! A.transform ( S.rotateAround (-45) xt yt)
           $ S.string (whereName $ whereMap M.! kWhere)
-      forM_ whoKeys $ \kWho -> do
-        let whoEvents = filter ((== kWho) . evWho) events
-            iWho = whoPos M.! kWho
-            xWho = map ((whenPos M.!) . evWhen) whoEvents
-            yWho = map ((wherePos M.!) . evWhere) whoEvents
-        case sortOn fst $ zip xWho yWho of
-             [] -> S.string ""
-             allXys@((x1,y1):xys) -> do
-               let firstX = left + x1 * gridW
-                   firstY = top + y1 * gridH + whoStep * iWho
-               S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
-                 ! A.markerEnd "url(#eventMark)"
-                 ! A.markerMid "url(#eventMark)"
-                 ! A.strokeWidth (S.toValue lineWidth)
-                 ! A.fill "none"
-                 ! A.d (S.mkPath $ do
-                   S.m firstX firstY
-                   S.s (left + whoNameSkip + x1 * gridW - gridW `div` 2) (top + y1 * gridH + whoStep * iWho)
-                       (left + whoNameSkip + x1 * gridW) (top + y1 * gridH + whoStep * iWho)
-                   forM_ (zip allXys xys) $ \((xl,yl),(xi,yi)) ->
-                     S.s (left + whoNameSkip + xi * gridW - gridW `div` 2) (top + yi * gridH + whoStep * iWho)
-                         (left + whoNameSkip + xi * gridW) (top + yi * gridH + whoStep * iWho)
-                   )
-               S.rect
-                 ! A.x (S.toValue $ firstX + whoNameGap)
-                 ! A.y (S.toValue $ firstY - whoNameHeight `div` 2)
-                 ! A.width (S.toValue whoNameLen)
-                 ! A.height (S.toValue whoNameHeight)
-                 ! A.stroke "none"
-                 ! A.fill "white"
-               S.text_
-                 ! A.x (S.toValue $ firstX + whoNameGap + whoNameLen `div` 2)
-                 ! A.y (S.toValue firstY)
-                 ! A.fill (S.toValue $ ppAxisColor pProp)
-                 ! A.fontSize (S.toValue (show whoNameHeight ++ "px"))
-                 ! A.dominantBaseline "middle"
-                 ! A.textAnchor "middle"
-                 $ S.string (whoName $ whoMap M.! kWho)
+
+      forM_ eventPos $ \whoEvPos ->
+        case whoEvPos of
+             Nothing -> return ()
+             Just (kWho, evPos) ->
+               case evPos of
+                   [] -> S.string ""
+                   ((iWho1,iWhen1,iWhere1):evPoss) -> do
+                     let firstX = left + gridW * iWhen1
+                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
+                         nx0 = firstX + whoNameSkip `div` 2
+                         ny0 = firstY
+                         nx1 = firstX + whoNameSkip
+                         ny1 = firstY
+                     S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
+                       ! A.markerEnd "url(#eventMark)"
+                       ! A.markerMid "url(#eventMark)"
+                       ! A.strokeWidth (S.toValue lineWidth)
+                       ! A.fill "none"
+                       ! A.d (S.mkPath $ do
+                         S.m firstX firstY
+                         S.s nx0 ny0 nx1 ny1
+                         forM_ evPoss $ \(iWho,iWhen,iWhere) -> do
+                           let x1 = left + whoNameSkip + gridW * iWhen
+                               y1 = top + whoStep * (iWho + whereStart !! iWhere)
+                               x0 = x1 - gridW `div` 2
+                               y0 = y1
+                           S.s x0 y0 x1 y1
+                         )
+      forM_ eventPos $ \whoEvPos ->
+        case whoEvPos of
+             Nothing -> return ()
+             Just (kWho, evPos) ->
+               case evPos of
+                   [] -> S.string ""
+                   ((iWho1,iWhen1,iWhere1):_) -> do
+                     let firstX = left + gridW * iWhen1
+                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
+                     S.rect
+                       ! A.x (S.toValue $ firstX + whoNameGap)
+                       ! A.y (S.toValue $ firstY - whoNameHeight `div` 2)
+                       ! A.width (S.toValue whoNameLen)
+                       ! A.height (S.toValue whoNameHeight)
+                       ! A.stroke "none"
+                       ! A.fill "white"
+                     S.text_
+                       ! A.x (S.toValue $ firstX + whoNameGap + whoNameLen `div` 2)
+                       ! A.y (S.toValue firstY)
+                       ! A.fill (S.toValue $ ppAxisColor pProp)
+                       ! A.fontSize (S.toValue (show whoNameHeight ++ "px"))
+                       ! A.dominantBaseline "middle"
+                       ! A.textAnchor "middle"
+                       $ S.string (whoName $ whoMap M.! kWho)
   where
   top = 0 `max` ppTop pProp
   bottom = 0 `max` ppBottom pProp
@@ -329,7 +356,6 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whoNameSkip = whoNameLen + 2 * whoNameGap + lineWidth
   lineWidth = whoNameHeight + whoNameEdge
   whoStep = lineWidth + 2
-  gridH = whoStep * (nWho + 2)
   textOffs = lineWidth `div` 2
   nWho = M.size whoMap
   nWhen = M.size whenMap
@@ -346,6 +372,54 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whenPos = M.fromList $ zip whenKeys [0::Int ..]
   wherePos = M.fromList $ zip whereKeys [0::Int ..]
 
+  whereStart = 0 : unfoldr accuInt (0,whereHeight)
+  whereTotal = sum whereHeight
+
+  (eventPos,whereHeight) = runST $ do
+    whoPosNow <- MV.replicate (nWhen*nWhere) (0::Int)
+    evP <- forM whoKeys $ \kWho -> do
+      let evThis = filter ((== kWho) . evWho) events
+          whenThis = map ((whenPos M.!) . evWhen) evThis
+          whereThis = map ((wherePos M.!) . evWhere) evThis
+      case sortOn fst $ zip whenThis whereThis of
+            [] -> return Nothing
+            ((iWhen1,iWhere1):iwws) -> do
+              iWho1 <- readInc whoPosNow (iWhen1 + iWhere1 * nWhen)
+              oneSeg <- forM iwws $ \(iWhen,iWhere) -> do
+                iWho <- readInc whoPosNow (iWhen + iWhere * nWhen)
+                return
+                  ( iWho
+                  , iWhen
+                  , iWhere
+                  )
+              return $ Just
+                ( kWho
+                , ( iWho1
+                  , iWhen1
+                  , iWhere1
+                  ) : oneSeg
+                )
+    whereH <- forM [0 .. (nWhere-1)] $ \iWhere -> do
+      cntWhere <- forM [0 .. (nWhen-1)] $ \ iWhen ->
+        MV.read whoPosNow (iWhen + iWhere * nWhen)
+      return $ 1 + maximum cntWhere
+    return (evP,whereH)
+
+  readInc vec offs = do
+    old <- MV.read vec offs
+    MV.modify vec (1+) offs
+    return old
+
+accuInt :: (Int,[Int]) -> Maybe (Int,(Int,[Int]))
+accuInt (_,[]) = Nothing
+accuInt (s,a:as) = Just (s+a,(s+a,as))
+
+computeWhereHeight :: StoryEvents -> WhereIdentifier -> Int
+computeWhereHeight events here =
+  let whereEvents = filter ((== here) . evWhere) events
+      sortedWhE = sort $ map evWhen whereEvents
+      cntWhE = map ((1 +). length) $ group sortedWhE
+  in maximum cntWhE
 
 alterWho :: WhoIdentifier -> Maybe WhoProperties -> Maybe WhoProperties
 alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black", whoKey = who }

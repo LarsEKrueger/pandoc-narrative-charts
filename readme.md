@@ -2,7 +2,7 @@
 
 ## TODO
 
-* [ ] vertical compaction of events
-* [ ] swimlanes
-* [ ] draw labels last
+* [x] vertical compaction of events
+* [x] swimlanes
+* [x] draw labels last
 * [ ] adaptive width of gaps (with and without label)
