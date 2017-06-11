@@ -76,7 +76,6 @@ data StoryEvent = StoryEvent
   { evWho :: WhoIdentifier
   , evWhen :: WhenIdentifier
   , evWhere :: WhereIdentifier
-  , evType :: EventType
   }
   deriving (Eq)
 
@@ -85,10 +84,9 @@ instance FromJSON StoryEvent where
     <$> v .: "who"
     <*> v .: "when"
     <*> v .: "where"
-    <*> pure VisibleEvent
   parseJSON invalid    = typeMismatch "StoryEvent" invalid
 
-type StoryEvents = [StoryEvent]
+type EventMap = M.Map (WhoIdentifier,WhenIdentifier) WhereIdentifier
 
 data WhoProperties = WhoProperties
   { whoName :: String
@@ -188,15 +186,15 @@ data Global = Global
   { gWhoMap :: WhoMap
   , gWhenMap :: WhenMap
   , gWhereMap :: WhereMap
-  , gEvents :: StoryEvents
+  , gEvents :: EventMap
   }
 
 instance Default Global where
   def = Global
-        { gWhoMap = M.empty 
+        { gWhoMap = M.empty
         , gWhenMap = M.empty
         , gWhereMap = M.empty
-        , gEvents = []
+        , gEvents = M.empty
         }
 
 globalAddWho :: WhoIdentifier -> WhoProperties -> Global -> Global
@@ -209,13 +207,13 @@ globalAddWhere :: WhereIdentifier -> WhereProperties -> Global -> Global
 globalAddWhere ident prop g = g { gWhereMap = M.insert ident prop $ gWhereMap g }
 
 globalAddEvent :: StoryEvent -> Global -> Global
-globalAddEvent e g = g { gEvents = e : gEvents g }
+globalAddEvent e g = g { gEvents = M.insert (evWho e,evWhen e) (evWhere e) $ gEvents g }
 
-renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> String
+renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> String
 renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
 
-toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> StoryEvents -> S.Svg
-toPlotSvg pProp whoMap' whenMap' whereMap' events =
+toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> S.Svg
+toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   S.svg
     ! A.width (S.toValue $ left + whoNameSkip + gridW * (nWhen - 1) + right)
     ! A.height (S.toValue $ top + whereTotal * whoStep + bottom)
@@ -252,7 +250,9 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
             ! A.cy (S.toValue (whoStep `div` 2))
             ! A.r (S.toValue (whoStep `div` 2))
 
-      S.path ! A.stroke (S.toValue $ ppAxisColor pProp)
+      -- Arrow of time
+      S.path
+        ! A.stroke (S.toValue $ ppAxisColor pProp)
         ! A.markerEnd "url(#arrowTip)"
         ! A.markerMid "url(#arrowMark)"
         ! A.markerStart "url(#arrowMark)"
@@ -263,6 +263,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
             S.l (left + whoNameSkip + i * gridW) y
           S.l (left + whoNameSkip + (nWhen - 1) * gridW + arrowGap) y
           )
+      -- Labels for arrow of time
       forM_ whenKeys $ \kWhen -> do
         let x = left + whoNameSkip + (whenPos M.! kWhen) * gridW
             y = top + whereTotal * whoStep + textOffs
@@ -275,6 +276,8 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.dominantBaseline "middle"
           ! A.transform (S.rotateAround (-45) x y)
           $ S.string (whenName $ whenMap M.! kWhen)
+
+      -- Swim lanes and place labels
       forM_ (zip4 whereKeys whereStart whereHeight $ cycle ["#ccc", "#eee"])$ \(kWhere,sWhere,hWhere,zebra) -> do
         let x = left - textOffs
             xt = x - lineWidth `div` 2
@@ -296,6 +299,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
           ! A.transform ( S.rotateAround (-45) xt yt)
           $ S.string (whereName $ whereMap M.! kWhere)
 
+      -- Event lines
       forM_ eventPos $ \whoEvPos ->
         case whoEvPos of
              Nothing -> return ()
@@ -367,6 +371,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
                                y0 = y1
                            S.s x0 y0 x1 y1
                          )
+      -- Event markers
       forM_ eventPos $ \whoEvPos ->
         case whoEvPos of
              Nothing -> return ()
@@ -408,30 +413,39 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whoStep = lineWidth + 2
   textOffs = lineWidth `div` 2
   frontLineWidth = 2 :: Int
-  nWho = M.size whoMap
-  nWhen = M.size whenMap
-  nWhere = M.size whereMap
+
+  -- Unique events
+  events = map (\((who,when),here) -> StoryEvent who when here) $ M.assocs events'
+
+  -- Maps updated with additional keys from events
   whoMap = foldl' (\m who -> M.alter (alterWho who) who m) whoMap' $ map evWho events
   whenMap = foldl' (\m when -> M.alter (alterWhen when) when m) whenMap' $ map evWhen events
   whereMap = foldl' (\m here -> M.alter (alterWhere here) here m) whereMap' $ map evWhere events
 
+  -- Number of items along each dimension
+  nWho = M.size whoMap
+  nWhen = M.size whenMap
+  nWhere = M.size whereMap
+
+  -- Ids sorted on keys
   whoKeys = map fst $ sortOn (whoKey . snd) $ M.assocs whoMap
   whenKeys = map fst $ sortOn (whenKey . snd) $ M.assocs whenMap
   whereKeys = map fst $ sortOn (whereKey . snd) $ M.assocs whereMap
 
+  -- Map the key-sorted ids to positions along their dimensions
   whoPos = M.fromList $ zip whoKeys [0::Int ..]
   whenPos = M.fromList $ zip whenKeys [0::Int ..]
   wherePos = M.fromList $ zip whereKeys [0::Int ..]
 
-  whereStart = 0 : unfoldr accuInt (0,whereHeight)
-  whereTotal = sum whereHeight
+  -- For each who, created a list of where over when. Pad missing items.
+  whoStory = map whereOverWhen whoKeys
 
-  padEvents = concatMap (\kWho ->
+  whereOverWhen kWho =
     let evThis =  filter ((== kWho) . evWho) events
         whenThis = map ((whenPos M.!) . evWhen) evThis
         evSort = map snd $ sortOn fst $ zip whenThis evThis
     in addFrontEvents evSort whenKeys
-    ) whoKeys
+
 
   addFrontEvents :: StoryEvents -> [WhenIdentifier] -> StoryEvents
   addFrontEvents _ [] = []
@@ -446,6 +460,13 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   addMiddleEvents here evl@(ev:evs) (when:whens)
     | evWhen ev == when = ev : addMiddleEvents (evWhere ev) evs whens
     | otherwise         = StoryEvent (evWho ev) when here InvisibleEvent : addMiddleEvents here evl whens
+
+
+
+
+
+  whereStart = 0 : unfoldr accuInt (0,whereHeight)
+  whereTotal = sum whereHeight
 
   (eventPos,whereHeight) = runST $ do
     whoPosNow <- MV.replicate (nWhen*nWhere) (0::Int)
