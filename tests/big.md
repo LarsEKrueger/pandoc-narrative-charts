@@ -86,13 +86,13 @@ where: valley
 ```narcha-event
 who: sidekick
 when: journey
-where: road
+where: valley
 ```
 
 ```narcha-event
 who: sidekick
-when: climax
-where: valley
+when: ending
+where: fortress
 ```
 
 ```narcha-event
