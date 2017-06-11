@@ -67,10 +67,16 @@ instance FromJSON WhereIdentifier where
   parseJSON (Y.String s) = WhereIdentifier <$> pure (T.unpack s)
   parseJSON invalid    = typeMismatch "WhereIdentifier" invalid
 
+data EventType = VisibleEvent
+               | InvisibleEvent
+               | FrontEvent
+  deriving (Eq)
+
 data StoryEvent = StoryEvent
   { evWho :: WhoIdentifier
   , evWhen :: WhenIdentifier
   , evWhere :: WhereIdentifier
+  , evType :: EventType
   }
   deriving (Eq)
 
@@ -79,6 +85,7 @@ instance FromJSON StoryEvent where
     <$> v .: "who"
     <*> v .: "when"
     <*> v .: "where"
+    <*> pure VisibleEvent
   parseJSON invalid    = typeMismatch "StoryEvent" invalid
 
 type StoryEvents = [StoryEvent]
@@ -292,25 +299,68 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
       forM_ eventPos $ \whoEvPos ->
         case whoEvPos of
              Nothing -> return ()
-             Just (kWho, evPos) ->
-               case evPos of
+             Just (kWho, evPos) -> do
+               case filter (\(_,_,_,t) -> t /= FrontEvent) evPos of
                    [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1):evPoss) -> do
+                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
-                         nx0 = firstX + whoNameSkip `div` 2
+                         nx0 = firstX + whoNameSkip - 1
                          ny0 = firstY
                          nx1 = firstX + whoNameSkip
                          ny1 = firstY
                      S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
+                       ! A.strokeWidth (S.toValue lineWidth)
+                       ! A.fill "none"
+                       ! A.d (S.mkPath $ do
+                         S.m nx1 ny1
+                         S.s nx0 ny0 nx1 ny1
+                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
+                           let x1 = left + whoNameSkip + gridW * iWhen
+                               y1 = top + whoStep * (iWho + whereStart !! iWhere)
+                               x0 = x1 - gridW `div` 2
+                               y0 = y1
+                           S.s x0 y0 x1 y1
+                         )
+               case filter (\(_,_,_,t) -> t == VisibleEvent) evPos of
+                   [] -> S.string ""
+                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
+                     let firstX = left + gridW * iWhen1
+                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
+                         nx0 = firstX + whoNameSkip - 1
+                         ny0 = firstY
+                         nx1 = firstX + whoNameSkip
+                         ny1 = firstY
+                     S.path ! A.stroke "none"
                        ! A.markerEnd "url(#eventMark)"
                        ! A.markerMid "url(#eventMark)"
-                       ! A.strokeWidth (S.toValue lineWidth)
+                       ! A.fill "none"
+                       ! A.d (S.mkPath $ do
+                         S.m nx1 ny1
+                         S.s nx0 ny0 nx1 ny1
+                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
+                           let x1 = left + whoNameSkip + gridW * iWhen
+                               y1 = top + whoStep * (iWho + whereStart !! iWhere)
+                               x0 = x1 - gridW `div` 2
+                               y0 = y1
+                           S.s x0 y0 x1 y1
+                         )
+               case takeUntil (\(_,_,_,t) -> t /= FrontEvent) evPos of
+                   [] -> S.string ""
+                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
+                     let firstX = left + gridW * iWhen1
+                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
+                         nx0 = firstX + whoNameSkip - 1
+                         ny0 = firstY
+                         nx1 = firstX + whoNameSkip
+                         ny1 = firstY
+                     S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
+                       ! A.strokeWidth (S.toValue frontLineWidth)
                        ! A.fill "none"
                        ! A.d (S.mkPath $ do
                          S.m firstX firstY
                          S.s nx0 ny0 nx1 ny1
-                         forM_ evPoss $ \(iWho,iWhen,iWhere) -> do
+                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
                            let x1 = left + whoNameSkip + gridW * iWhen
                                y1 = top + whoStep * (iWho + whereStart !! iWhere)
                                x0 = x1 - gridW `div` 2
@@ -323,7 +373,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
              Just (kWho, evPos) ->
                case evPos of
                    [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1):_) -> do
+                   ((iWho1,iWhen1,iWhere1,_):_) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
                      S.rect
@@ -357,6 +407,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   lineWidth = whoNameHeight + whoNameEdge
   whoStep = lineWidth + 2
   textOffs = lineWidth `div` 2
+  frontLineWidth = 2 :: Int
   nWho = M.size whoMap
   nWhen = M.size whenMap
   nWhere = M.size whereMap
@@ -375,28 +426,52 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events =
   whereStart = 0 : unfoldr accuInt (0,whereHeight)
   whereTotal = sum whereHeight
 
+  padEvents = concatMap (\kWho ->
+    let evThis =  filter ((== kWho) . evWho) events
+        whenThis = map ((whenPos M.!) . evWhen) evThis
+        evSort = map snd $ sortOn fst $ zip whenThis evThis
+    in addFrontEvents evSort whenKeys
+    ) whoKeys
+
+  addFrontEvents :: StoryEvents -> [WhenIdentifier] -> StoryEvents
+  addFrontEvents _ [] = []
+  addFrontEvents [] _ = []
+  addFrontEvents evl@(ev:evs) (when:whens)
+    | evWhen ev == when = ev : addMiddleEvents (evWhere ev) evs whens
+    | otherwise         = StoryEvent (evWho ev) when (evWhere ev) FrontEvent : addFrontEvents evl whens
+
+  addMiddleEvents :: WhereIdentifier -> StoryEvents -> [WhenIdentifier] -> StoryEvents
+  addMiddleEvents _ _ [] = []
+  addMiddleEvents _ [] _ = []
+  addMiddleEvents here evl@(ev:evs) (when:whens)
+    | evWhen ev == when = ev : addMiddleEvents (evWhere ev) evs whens
+    | otherwise         = StoryEvent (evWho ev) when here InvisibleEvent : addMiddleEvents here evl whens
+
   (eventPos,whereHeight) = runST $ do
     whoPosNow <- MV.replicate (nWhen*nWhere) (0::Int)
     evP <- forM whoKeys $ \kWho -> do
-      let evThis = filter ((== kWho) . evWho) events
+      let evThis = filter ((== kWho) . evWho) padEvents
           whenThis = map ((whenPos M.!) . evWhen) evThis
           whereThis = map ((wherePos M.!) . evWhere) evThis
-      case sortOn fst $ zip whenThis whereThis of
+          typeThis = map evType evThis
+      case sortOn (\(x,_,_)->x) $ zip3 whenThis whereThis typeThis of
             [] -> return Nothing
-            ((iWhen1,iWhere1):iwws) -> do
+            ((iWhen1,iWhere1,iType1):iwws) -> do
               iWho1 <- readInc whoPosNow (iWhen1 + iWhere1 * nWhen)
-              oneSeg <- forM iwws $ \(iWhen,iWhere) -> do
+              oneSeg <- forM iwws $ \(iWhen,iWhere,iType) -> do
                 iWho <- readInc whoPosNow (iWhen + iWhere * nWhen)
                 return
                   ( iWho
                   , iWhen
                   , iWhere
+                  , iType
                   )
               return $ Just
                 ( kWho
                 , ( iWho1
                   , iWhen1
                   , iWhere1
+                  , iType1
                   ) : oneSeg
                 )
     whereH <- forM [0 .. (nWhere-1)] $ \iWhere -> do
@@ -469,6 +544,13 @@ processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
          return $ RawBlock "HTML" svg
        Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
+
+takeUntil :: (a -> Bool) -> [a] -> [a]
+takeUntil _ [] = []
+takeUntil p (a:as) =
+  if p a
+     then [a]
+     else a : takeUntil p as
 
 main :: IO ()
 main = do

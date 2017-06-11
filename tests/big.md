@@ -2,26 +2,19 @@
 
 ```narcha-event
 who: Cat
+when: void
+where: home
+```
+```narcha-event
+who: Cat
 when: beginning
 where: home
 ```
 
 ```narcha-event
 who: Cat
-when: kickoff
-where: home
-```
-
-```narcha-event
-who: Cat
 when: journey
-where: home
-```
-
-```narcha-event
-who: Cat
-when: climax
-where: home
+where: street
 ```
 
 ```narcha-event
@@ -110,8 +103,8 @@ where: valley
 
 ```narcha-event
 who: minion
-when: climax
-where: valley
+when: ending
+where: road
 ```
 
 
@@ -188,6 +181,12 @@ id: minion
 name: Helper
 color: pink
 key: "21"
+```
+
+```narcha-when
+id: void
+name: Big Bang
+key: "0"
 ```
 
 ```narcha-when
