@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-
 Copyright (c) 2017 Lars Krueger
 
@@ -153,6 +153,19 @@ instance FromJSON WhereIdProp where
     <*> v .: "key"
   parseJSON invalid    = typeMismatch "WhereIdProp" invalid
 
+data WhereOverWhen = WhereOverWhen
+  { wowWhere :: WhereIdentifier
+  , wowType :: EventType
+  }
+
+data WhereOverWhenIdx = WhereOverWhenIdx
+  { wowiWho :: Int
+  , wowiWhen :: Int
+  , wowiWhere :: Int
+  , wowiEvent :: Int
+  , wowiType :: EventType
+  }
+
 data PlotProperties = PlotProperties
   { ppAxisColor :: String
   , ppTop :: Int
@@ -300,13 +313,14 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
           $ S.string (whereName $ whereMap M.! kWhere)
 
       -- Event lines
-      forM_ eventPos $ \whoEvPos ->
-        case whoEvPos of
-             Nothing -> return ()
-             Just (kWho, evPos) -> do
-               case filter (\(_,_,_,t) -> t /= FrontEvent) evPos of
+      forM_ (zip whoKeys wowiByWho) $ \(kWho, wowiOfWho) ->
+        case wowiOfWho of
+             [] -> return ()
+             _ -> do
+               -- Normal lines
+               case filter ((/= FrontEvent).wowiType) wowiOfWho of
                    [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
+                   (WhereOverWhenIdx _ iWhen1 iWhere1 iWho1 _:rest) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
                          nx0 = firstX + whoNameSkip - 1
@@ -319,16 +333,45 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
                        ! A.d (S.mkPath $ do
                          S.m nx1 ny1
                          S.s nx0 ny0 nx1 ny1
-                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
+                         forM_ rest $ \(WhereOverWhenIdx _ iWhen iWhere iWho _) -> do
                            let x1 = left + whoNameSkip + gridW * iWhen
                                y1 = top + whoStep * (iWho + whereStart !! iWhere)
                                x0 = x1 - gridW `div` 2
                                y0 = y1
                            S.s x0 y0 x1 y1
                          )
-               case filter (\(_,_,_,t) -> t == VisibleEvent) evPos of
+               -- Front lines
+               case takeUntil ((/= FrontEvent).wowiType) wowiOfWho of
                    [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
+                   (WhereOverWhenIdx _ iWhen1 iWhere1 iWho1 _:rest) -> do
+                     let firstX = left + gridW * iWhen1
+                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
+                         nx0 = firstX + whoNameSkip - 1
+                         ny0 = firstY
+                         nx1 = firstX + whoNameSkip
+                         ny1 = firstY
+                     S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
+                       ! A.strokeWidth (S.toValue frontLineWidth)
+                       ! A.fill "none"
+                       ! A.d (S.mkPath $ do
+                         S.m (firstX + whoNameGap + whoNameLen `div` 2) firstY
+                         S.s nx0 ny0 nx1 ny1
+                         forM_ rest $ \(WhereOverWhenIdx _ iWhen iWhere iWho _) -> do
+                           let x1 = left + whoNameSkip + gridW * iWhen
+                               y1 = top + whoStep * (iWho + whereStart !! iWhere)
+                               x0 = x1 - gridW `div` 2
+                               y0 = y1
+                           S.s x0 y0 x1 y1
+                         )
+      -- Name tags and markers
+      forM_ (zip whoKeys wowiByWho) $ \(kWho,wowiOfWho) ->
+        case wowiOfWho of
+             [] -> return ()
+             _ -> do
+               -- Event markers
+               case filter ((== VisibleEvent).wowiType) wowiOfWho of
+                   [] -> S.string ""
+                   (WhereOverWhenIdx _ iWhen1 iWhere1 iWho1 _:rest) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
                          nx0 = firstX + whoNameSkip - 1
@@ -342,44 +385,18 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
                        ! A.d (S.mkPath $ do
                          S.m nx1 ny1
                          S.s nx0 ny0 nx1 ny1
-                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
+                         forM_ rest $ \(WhereOverWhenIdx _ iWhen iWhere iWho _) -> do
                            let x1 = left + whoNameSkip + gridW * iWhen
                                y1 = top + whoStep * (iWho + whereStart !! iWhere)
                                x0 = x1 - gridW `div` 2
                                y0 = y1
                            S.s x0 y0 x1 y1
                          )
-               case takeUntil (\(_,_,_,t) -> t /= FrontEvent) evPos of
+               -- Name tags
+               case wowiOfWho of
                    [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1,_):evPoss) -> do
-                     let firstX = left + gridW * iWhen1
-                         firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
-                         nx0 = firstX + whoNameSkip - 1
-                         ny0 = firstY
-                         nx1 = firstX + whoNameSkip
-                         ny1 = firstY
-                     S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
-                       ! A.strokeWidth (S.toValue frontLineWidth)
-                       ! A.fill "none"
-                       ! A.d (S.mkPath $ do
-                         S.m firstX firstY
-                         S.s nx0 ny0 nx1 ny1
-                         forM_ evPoss $ \(iWho,iWhen,iWhere,_) -> do
-                           let x1 = left + whoNameSkip + gridW * iWhen
-                               y1 = top + whoStep * (iWho + whereStart !! iWhere)
-                               x0 = x1 - gridW `div` 2
-                               y0 = y1
-                           S.s x0 y0 x1 y1
-                         )
-      -- Event markers
-      forM_ eventPos $ \whoEvPos ->
-        case whoEvPos of
-             Nothing -> return ()
-             Just (kWho, evPos) ->
-               case evPos of
-                   [] -> S.string ""
-                   ((iWho1,iWhen1,iWhere1,_):_) -> do
-                     let firstX = left + gridW * iWhen1
+                   (WhereOverWhenIdx _ _ iWhere1 iWho1 _:_) -> do
+                     let firstX = left
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
                      S.rect
                        ! A.x (S.toValue $ firstX + whoNameGap)
@@ -437,69 +454,53 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   whenPos = M.fromList $ zip whenKeys [0::Int ..]
   wherePos = M.fromList $ zip whereKeys [0::Int ..]
 
-  -- For each who, created a list of where over when. Pad missing items.
-  whoStory = map whereOverWhen whoKeys
+  -- For each who, keep a list of where over when. Pad missing items and mark
+  -- them.
+  whoStory = map padWhereOverWhen whoKeys
 
-  whereOverWhen kWho =
+  padWhereOverWhen kWho =
     let evThis =  filter ((== kWho) . evWho) events
         whenThis = map ((whenPos M.!) . evWhen) evThis
         evSort = map snd $ sortOn fst $ zip whenThis evThis
     in addFrontEvents evSort whenKeys
 
-
-  addFrontEvents :: StoryEvents -> [WhenIdentifier] -> StoryEvents
+  addFrontEvents :: [StoryEvent] -> [WhenIdentifier] -> [WhereOverWhen]
   addFrontEvents _ [] = []
   addFrontEvents [] _ = []
   addFrontEvents evl@(ev:evs) (when:whens)
-    | evWhen ev == when = ev : addMiddleEvents (evWhere ev) evs whens
-    | otherwise         = StoryEvent (evWho ev) when (evWhere ev) FrontEvent : addFrontEvents evl whens
+    | evWhen ev == when = WhereOverWhen (evWhere ev) VisibleEvent : addMiddleEvents (evWhere ev) evs whens
+    | otherwise         = WhereOverWhen (evWhere ev) FrontEvent : addFrontEvents evl whens
 
-  addMiddleEvents :: WhereIdentifier -> StoryEvents -> [WhenIdentifier] -> StoryEvents
+  addMiddleEvents :: WhereIdentifier -> [StoryEvent] -> [WhenIdentifier] -> [WhereOverWhen]
   addMiddleEvents _ _ [] = []
   addMiddleEvents _ [] _ = []
   addMiddleEvents here evl@(ev:evs) (when:whens)
-    | evWhen ev == when = ev : addMiddleEvents (evWhere ev) evs whens
-    | otherwise         = StoryEvent (evWho ev) when here InvisibleEvent : addMiddleEvents here evl whens
+    | evWhen ev == when = WhereOverWhen (evWhere ev) VisibleEvent : addMiddleEvents (evWhere ev) evs whens
+    | otherwise         = WhereOverWhen (evWhere ev) InvisibleEvent : addMiddleEvents here evl whens
 
-
-
-
-
+  -- For each who, keep a list of the height and the start position (measured
+  -- in multiples of whoStep).
   whereStart = 0 : unfoldr accuInt (0,whereHeight)
   whereTotal = sum whereHeight
 
-  (eventPos,whereHeight) = runST $ do
+  -- Compute the position of each WhereOverWhen based on its type. The order
+  -- is visible, invisible, front
+  (wowiByWho,whereHeight) = runST $ do
     whoPosNow <- MV.replicate (nWhen*nWhere) (0::Int)
-    evP <- forM whoKeys $ \kWho -> do
-      let evThis = filter ((== kWho) . evWho) padEvents
-          whenThis = map ((whenPos M.!) . evWhen) evThis
-          whereThis = map ((wherePos M.!) . evWhere) evThis
-          typeThis = map evType evThis
-      case sortOn (\(x,_,_)->x) $ zip3 whenThis whereThis typeThis of
-            [] -> return Nothing
-            ((iWhen1,iWhere1,iType1):iwws) -> do
-              iWho1 <- readInc whoPosNow (iWhen1 + iWhere1 * nWhen)
-              oneSeg <- forM iwws $ \(iWhen,iWhere,iType) -> do
-                iWho <- readInc whoPosNow (iWhen + iWhere * nWhen)
-                return
-                  ( iWho
-                  , iWhen
-                  , iWhere
-                  , iType
-                  )
-              return $ Just
-                ( kWho
-                , ( iWho1
-                  , iWhen1
-                  , iWhere1
-                  , iType1
-                  ) : oneSeg
-                )
+    typedWowi <- forM [VisibleEvent,InvisibleEvent,FrontEvent] $ \chkType ->
+      forM (zip whoStory [0::Int ..]) $ \(wow,iWho) ->
+        forM (filter ((==chkType) . wowType . fst) $ zip wow [0::Int .. ]) $ \(WhereOverWhen here _,iWhen)  -> do
+          let iWhere = wherePos M.! here
+          iEvent <- readInc whoPosNow (iWhen + iWhere * nWhen)
+          return $ WhereOverWhenIdx iWho iWhen iWhere iEvent chkType
+
+    let unsortedWowi = concatMap concat (typedWowi :: [[[WhereOverWhenIdx]]])
+        wowiByWho' = map (\iWho -> sortOn wowiWhen $ filter ((==iWho).wowiWho) unsortedWowi) [0 .. (nWho-1)]
     whereH <- forM [0 .. (nWhere-1)] $ \iWhere -> do
       cntWhere <- forM [0 .. (nWhen-1)] $ \ iWhen ->
         MV.read whoPosNow (iWhen + iWhere * nWhen)
       return $ 1 + maximum cntWhere
-    return (evP,whereH)
+    return (wowiByWho',whereH)
 
   readInc vec offs = do
     old <- MV.read vec offs
@@ -509,13 +510,6 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
 accuInt :: (Int,[Int]) -> Maybe (Int,(Int,[Int]))
 accuInt (_,[]) = Nothing
 accuInt (s,a:as) = Just (s+a,(s+a,as))
-
-computeWhereHeight :: StoryEvents -> WhereIdentifier -> Int
-computeWhereHeight events here =
-  let whereEvents = filter ((== here) . evWhere) events
-      sortedWhE = sort $ map evWhen whereEvents
-      cntWhE = map ((1 +). length) $ group sortedWhE
-  in maximum cntWhE
 
 alterWho :: WhoIdentifier -> Maybe WhoProperties -> Maybe WhoProperties
 alterWho (WhoIdentifier who) Nothing = Just WhoProperties { whoName = who, whoColor = "black", whoKey = who }

@@ -98,13 +98,19 @@ where: fortress
 ```narcha-event
 who: minion
 when: kickoff
-where: valley
+where: fortress
 ```
 
 ```narcha-event
 who: minion
 when: ending
 where: road
+```
+
+```narcha-event
+who: bird
+when: happy-end
+where: fortress
 ```
 
 
@@ -181,6 +187,13 @@ id: minion
 name: Helper
 color: pink
 key: "21"
+```
+
+```narcha-who
+id: bird
+name: Bird
+color: cyan
+key: "22"
 ```
 
 ```narcha-when
