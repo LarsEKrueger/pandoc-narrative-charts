@@ -476,7 +476,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   addMiddleEvents _ [] _ = []
   addMiddleEvents here evl@(ev:evs) (when:whens)
     | evWhen ev == when = WhereOverWhen (evWhere ev) VisibleEvent : addMiddleEvents (evWhere ev) evs whens
-    | otherwise         = WhereOverWhen (evWhere ev) InvisibleEvent : addMiddleEvents here evl whens
+    | otherwise         = WhereOverWhen here InvisibleEvent : addMiddleEvents here evl whens
 
   -- For each who, keep a list of the height and the start position (measured
   -- in multiples of whoStep).
