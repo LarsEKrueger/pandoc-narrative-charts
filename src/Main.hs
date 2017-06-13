@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-
 Copyright (c) 2017 Lars Krueger
 
@@ -323,22 +323,20 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
                    (WhereOverWhenIdx _ iWhen1 iWhere1 iWho1 _:rest) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
-                         nx0 = firstX + whoNameSkip - 1
-                         ny0 = firstY
+                         nx0 = nx1 - lineWidth `div` 2
                          nx1 = firstX + whoNameSkip
-                         ny1 = firstY
                      S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
                        ! A.strokeWidth (S.toValue lineWidth)
                        ! A.fill "none"
                        ! A.d (S.mkPath $ do
-                         S.m nx1 ny1
-                         S.s nx0 ny0 nx1 ny1
+                         S.m nx1 firstY
+                         S.s nx0 firstY nx1 firstY
                          forM_ rest $ \(WhereOverWhenIdx _ iWhen iWhere iWho _) -> do
-                           let x1 = left + whoNameSkip + gridW * iWhen
+                           let x1 = whenOfI iWhen
                                y1 = top + whoStep * (iWho + whereStart !! iWhere)
                                x0 = x1 - gridW `div` 2
-                               y0 = y1
-                           S.s x0 y0 x1 y1
+                           S.s x0 y1 x1 y1
+
                          )
                -- Front lines
                case takeUntil ((/= FrontEvent).wowiType) wowiOfWho of
@@ -346,22 +344,19 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
                    (WhereOverWhenIdx _ iWhen1 iWhere1 iWho1 _:rest) -> do
                      let firstX = left + gridW * iWhen1
                          firstY = top + whoStep * (iWho1 + whereStart !! iWhere1)
-                         nx0 = firstX + whoNameSkip - 1
-                         ny0 = firstY
+                         nx0 = nx1 - gridW2
                          nx1 = firstX + whoNameSkip
-                         ny1 = firstY
                      S.path ! A.stroke (S.toValue $ whoColor $ whoMap M.! kWho)
                        ! A.strokeWidth (S.toValue frontLineWidth)
                        ! A.fill "none"
                        ! A.d (S.mkPath $ do
                          S.m (firstX + whoNameGap + whoNameLen `div` 2) firstY
-                         S.s nx0 ny0 nx1 ny1
+                         S.s nx0 firstY nx1 firstY
                          forM_ rest $ \(WhereOverWhenIdx _ iWhen iWhere iWho _) -> do
-                           let x1 = left + whoNameSkip + gridW * iWhen
+                           let x1 = whenOfI iWhen
                                y1 = top + whoStep * (iWho + whereStart !! iWhere)
-                               x0 = x1 - gridW `div` 2
-                               y0 = y1
-                           S.s x0 y0 x1 y1
+                               x0 = x1 - gridW2
+                           S.s x0 y1 x1 y1
                          )
       -- Name tags and markers
       forM_ (zip whoKeys wowiByWho) $ \(kWho,wowiOfWho) ->
@@ -430,6 +425,10 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   whoStep = lineWidth + 2
   textOffs = lineWidth `div` 2
   frontLineWidth = 2 :: Int
+
+  gridW2 = gridW `div` 2
+
+  whenOfI i = left + whoNameSkip + gridW * i
 
   -- Unique events
   events = map (\((who,when),here) -> StoryEvent who when here) $ M.assocs events'
