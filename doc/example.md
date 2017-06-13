@@ -1,20 +1,3 @@
-# Pandoc filter to generate narrative charts
-
-This module provides a filter for [pandoc](https://www.pandoc.org) to generate
-[narrative charts](https://www.xkcd.com/657). The look of these charts can be
-customized to a certain extent (e.g. colors, line widths). The story line of
-each character is routed automatically with respect to the other characters.
-
-# Example
-
-The chart
-
-![Example Narrative Chart](doc/example.svg)
-
-has been generated from the following document:
-
-~~~
-
 ```narcha-event
 who: hero
 when: beginning
@@ -146,26 +129,4 @@ id: ending
 name: Fin
 key: "5"
 ```
-
-
-~~~
-
-
-
-# Possible improvements
-
-* Use natural sort for keys, e.g.
-    ```
-    thing10
-    thing1
-    thing-12
-    ```
-    would be sorted as
-    ```
-    thing-12
-    thing1
-    thing10
-    ```
-* Better parsing of integer keys, i.e. no more quotes.
-* Nicer curves on the first events
 
