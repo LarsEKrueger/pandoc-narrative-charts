@@ -132,3 +132,22 @@ name: Fin
 key: "5"
 ```
 
+
+```narcha-who
+id: bird
+name: Bird
+color: pink
+key: "7"
+```
+
+```narcha-when
+id: big-crunch
+name: Big Crunch
+key: "6"
+```
+
+```narcha-where
+id: nowhere
+name: Nowhere
+key: "9"
+```
