@@ -9,7 +9,7 @@ each character is routed automatically with respect to the other characters.
 
 The chart
 
-![Example Narrative Chart](doc/example.svg)
+![Example Narrative Chart](./doc/example.svg "Example narrative chart")
 
 has been generated from the following markdown document:
 
