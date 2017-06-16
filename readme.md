@@ -261,6 +261,7 @@ nameHeight: <integer>   [10]
 nameEdge: <integer>     [1]
 nameLen: <integer>      [50]
 nameGap: <integer>      [1]
+show: <boolean>         [yes]
 ```
 
 This will generate a plot from the elements with the parameter above. The
@@ -285,6 +286,7 @@ meaning of these elements is:
 | nameEdge   | Number of pixel, denoting the vertical gap between character name boxes.                               |
 | nameLen    | Number of pixels, denoting the width of the character name box. The name will not be clipped.          |
 | nameGap    | Number of pixels between the box of the character name and the first event marker.                     |
+| show       | Should the plot be displayed. Use this to temporarily disable a plot.                                  |
 
 # Possible improvements
 

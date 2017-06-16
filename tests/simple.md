@@ -151,3 +151,7 @@ id: nowhere
 name: Nowhere
 key: "9"
 ```
+
+```narcha-plot
+show: no
+```

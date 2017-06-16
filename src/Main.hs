@@ -178,6 +178,7 @@ data PlotProperties = PlotProperties
   , ppNameEdge :: Int
   , ppNameLen :: Int
   , ppNameGap :: Int
+  , ppShow :: Bool
   }
 
 instance FromJSON PlotProperties where
@@ -193,6 +194,7 @@ instance FromJSON PlotProperties where
     <*> v .:? "nameEdge" .!= 1
     <*> v .:? "nameLen" .!= 50
     <*> v .:? "nameGap" .!= 1
+    <*> v .:? "show" .!= True
   parseJSON invalid    = typeMismatch "PlotProperties" invalid
 
 data Global = Global
@@ -554,8 +556,11 @@ processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
        Right (pp@PlotProperties{}) -> do
          global <- readIORef globalRef
-         let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
-         return $ RawBlock "HTML" svg
+         if ppShow pp
+            then do
+              let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
+              return $ RawBlock "HTML" svg
+            else return Text.Pandoc.Definition.Null
        Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
 
