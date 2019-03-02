@@ -170,11 +170,13 @@ The syntax of each element is as follows:
 
 ## Events: `narcha-event`
 
-```
+~~~
+```narcha-event
 who: <who-id>
 when: <when-id>
 where: <where-id>
 ```
+~~~
 
 The three ids `<who-id>`, `<when-id>`, `<where-id>` are arbitrary unicode
 strings that identify a character, a time, and a place this event will happen
@@ -184,12 +186,14 @@ Events are unique. Mentioning the same event multiple times has no effect.
 
 ## Characters: `narcha-who`
 
+~~~
 ```narcha-who
 id: <who-id>
 name: <name>
 color: <color>
 key: <key>
 ```
+~~~
 
 This element provides optional descriptions for characters. Again, this has to
 be unique. If multiple elements for the same `<who-id>` are found, the last one is used.
@@ -221,11 +225,13 @@ key9
 
 ## Times: `narcha-when`
 
+~~~
 ```narcha-when
 id: <when-id>
 name: <name>
 key: <key>
 ```
+~~~
 
 These are similar fields as in `narcha-who` with similar meanings and
 limitations.
@@ -235,11 +241,13 @@ time (columns) in the chart.
 
 ## Places: `narcha-where`
 
+~~~
 ```narcha-where
 id: <where-id>
 name: <name>
 key: <key>
 ```
+~~~
 
 These are similar fields as in `narcha-who` with similar meanings and
 limitations.
@@ -247,8 +255,29 @@ limitations.
 Extranous descriptions are also undefined behaviour and will be mapped to empty
 places (rows) in the chart.
 
+The `<name>` field can be a multi-line YAML string, e.g.
+
+~~~
+```narcha-where
+id: somewhere
+name: |-
+  Here
+  There
+  Everywhere
+key: "012"
+```
+~~~
+
+For each line, a separate line will be produced in the SVG.
+
+In case you do not add `narcha-where` definitions, the `<name>` and `<id>` fields will be set to
+the `<id>` field of the event as used in an event. In this case, the keys will
+be generated as zero-padded three-digit numbers in order of apperance in the
+events. This will generate the cleanest charts.
+
 ## Plots: `narcha-plot`
 
+~~~
 ```narcha-plot
 axisColor: <color>      [black]
 top: <integer>          [20]
@@ -263,6 +292,7 @@ nameLen: <integer>      [50]
 nameGap: <integer>      [1]
 show: <boolean>         [yes]
 ```
+~~~
 
 This will generate a plot from the elements with the parameter above. The
 parameters can be given in any order. If a parameter is not present, the value
