@@ -1,3 +1,5 @@
 dist
 *.html
 *.svg
+.stack-work
+stack.yaml
