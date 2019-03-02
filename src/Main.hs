@@ -89,7 +89,7 @@ instance FromJSON StoryEvent where
     <*> v .: "where"
   parseJSON invalid    = typeMismatch "StoryEvent" invalid
 
-type EventMap = M.Map (WhoIdentifier,WhenIdentifier) WhereIdentifier
+type EventMap = M.Map (WhenIdentifier,WhoIdentifier) WhereIdentifier
 
 data WhoProperties = WhoProperties
   { whoName  :: String
@@ -226,7 +226,7 @@ globalAddWhere :: WhereIdentifier -> WhereProperties -> Global -> Global
 globalAddWhere ident prop g = g { gWhereMap = M.insert ident prop $ gWhereMap g }
 
 globalAddEvent :: StoryEvent -> Global -> Global
-globalAddEvent e g = g { gEvents = M.insert (evWho e,evWhen e) (evWhere e) $ gEvents g }
+globalAddEvent e g = g { gEvents = M.insert (evWhen e,evWho e) (evWhere e) $ gEvents g }
 
 renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> String
 renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
@@ -446,7 +446,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   whenOfI i = left + whoNameSkip + gridW * i
 
   -- Unique events
-  events = map (\((who,when),here) -> StoryEvent who when here) $ M.assocs events'
+  events = map (\((when,who),here) -> StoryEvent who when here) $ M.assocs events'
 
   -- Maps updated with additional keys from events
   whoMap = foldl' (\m who -> M.alter (alterWho who) who m) whoMap' $ map evWho events
