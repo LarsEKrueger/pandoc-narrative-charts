@@ -25,11 +25,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 module Main
 where
 
-import qualified Data.Map.Lazy                  as M
-import           Text.Pandoc.Definition
-import           Text.Pandoc.JSON               as J
-import           Text.Pandoc.Walk
-
 import           Control.Monad                  (forM, forM_)
 import           Control.Monad.ST
 import           Data.Aeson
@@ -37,8 +32,11 @@ import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy           as B
 import qualified Data.ByteString.Lazy.Char8     as C
 import           Data.Default
+import qualified Data.IntMap.Lazy               as IM
 import           Data.IORef
 import           Data.List
+import qualified Data.Map.Lazy                  as M
+import qualified Data.Set                       as Set
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import qualified Data.Vector.Unboxed.Mutable    as MV
@@ -48,6 +46,10 @@ import qualified Text.Blaze.Svg.Renderer.String as R
 import           Text.Blaze.Svg11               (l, m, mkPath, rotate, z, (!))
 import qualified Text.Blaze.Svg11               as S
 import qualified Text.Blaze.Svg11.Attributes    as A
+import           Text.Pandoc.Definition
+import           Text.Pandoc.JSON               as J
+import           Text.Pandoc.Walk
+import           Text.Printf
 
 newtype WhoIdentifier = WhoIdentifier String
   deriving (Eq, Ord, Show)
@@ -233,8 +235,10 @@ renderWhereLabel :: Int -> Int -> [String] -> S.Svg
 renderWhereLabel _ _ [] = S.string ""
 renderWhereLabel _ _ [l] = S.string l
 renderWhereLabel xt textHeight ls = forM_ (zip ls [0..]) $ \(l,lno) -> do
-  S.tspan ! A.x (S.toValue $ show (xt - lno * textHeight) ++ "px" ) ! A.dy (if lno == 0 then "0" else "1.2em") $ S.string l
-
+  S.tspan
+    ! A.x (S.toValue $ show (xt - lno * textHeight) ++ "px" )
+    ! A.dy (if lno == 0 then "0" else "1.2em")
+    $ S.string l
 
 toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> S.Svg
 toPlotSvg pProp whoMap' whenMap' whereMap' events' =
