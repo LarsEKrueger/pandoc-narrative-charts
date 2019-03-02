@@ -25,28 +25,29 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 module Main
 where
 
-import Text.Pandoc.JSON as J
-import Text.Pandoc.Walk
-import Text.Pandoc.Definition
-import qualified Data.Map.Lazy as M
+import qualified Data.Map.Lazy                  as M
+import           Text.Pandoc.Definition
+import           Text.Pandoc.JSON               as J
+import           Text.Pandoc.Walk
 
-import Text.Blaze.Svg11 ((!), mkPath, rotate, l, m, z)
-import qualified Text.Blaze.Svg11 as S
-import qualified Text.Blaze.Svg11.Attributes as A
+import           Control.Monad                  (forM, forM_)
+import           Control.Monad.ST
+import           Data.Aeson
+import           Data.Aeson.Types
+import qualified Data.ByteString.Lazy           as B
+import qualified Data.ByteString.Lazy.Char8     as C
+import           Data.Default
+import           Data.IORef
+import           Data.List
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
+import qualified Data.Vector.Unboxed.Mutable    as MV
+import qualified Data.Yaml                      as Y
+import qualified System.IO                      as SIO
 import qualified Text.Blaze.Svg.Renderer.String as R
-import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as C
-import Data.List
-import Control.Monad (forM_, forM)
-import Data.Default
-import Data.IORef
-import Data.Aeson
-import Data.Aeson.Types
-import qualified Data.Yaml as Y
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Vector.Unboxed.Mutable as MV
-import Control.Monad.ST
+import           Text.Blaze.Svg11               (l, m, mkPath, rotate, z, (!))
+import qualified Text.Blaze.Svg11               as S
+import qualified Text.Blaze.Svg11.Attributes    as A
 
 newtype WhoIdentifier = WhoIdentifier String
   deriving (Eq, Ord, Show)
@@ -57,15 +58,15 @@ newtype WhereIdentifier = WhereIdentifier String
 
 instance FromJSON WhoIdentifier where
   parseJSON (Y.String s) = WhoIdentifier <$> pure (T.unpack s)
-  parseJSON invalid    = typeMismatch "WhoIdentifier" invalid
+  parseJSON invalid      = typeMismatch "WhoIdentifier" invalid
 
 instance FromJSON WhenIdentifier where
   parseJSON (Y.String s) = WhenIdentifier <$> pure (T.unpack s)
-  parseJSON invalid    = typeMismatch "WhenIdentifier" invalid
+  parseJSON invalid      = typeMismatch "WhenIdentifier" invalid
 
 instance FromJSON WhereIdentifier where
   parseJSON (Y.String s) = WhereIdentifier <$> pure (T.unpack s)
-  parseJSON invalid    = typeMismatch "WhereIdentifier" invalid
+  parseJSON invalid      = typeMismatch "WhereIdentifier" invalid
 
 data EventType = VisibleEvent
                | InvisibleEvent
@@ -73,11 +74,11 @@ data EventType = VisibleEvent
   deriving (Eq)
 
 data StoryEvent = StoryEvent
-  { evWho :: WhoIdentifier
-  , evWhen :: WhenIdentifier
+  { evWho   :: WhoIdentifier
+  , evWhen  :: WhenIdentifier
   , evWhere :: WhereIdentifier
   }
-  deriving (Eq)
+  deriving (Eq, Show)
 
 instance FromJSON StoryEvent where
   parseJSON (Object v) = StoryEvent
@@ -89,9 +90,9 @@ instance FromJSON StoryEvent where
 type EventMap = M.Map (WhoIdentifier,WhenIdentifier) WhereIdentifier
 
 data WhoProperties = WhoProperties
-  { whoName :: String
+  { whoName  :: String
   , whoColor :: String
-  , whoKey :: String
+  , whoKey   :: String
   }
 
 type WhoMap = M.Map WhoIdentifier WhoProperties
@@ -114,7 +115,7 @@ instance FromJSON WhoIdProp where
 
 data WhenProperties = WhenProperties
   { whenName :: String
-  , whenKey :: String
+  , whenKey  :: String
   }
 
 type WhenMap = M.Map WhenIdentifier WhenProperties
@@ -136,8 +137,9 @@ instance FromJSON WhenIdProp where
 
 data WhereProperties = WhereProperties
   { whereName :: String
-  , whereKey :: String
+  , whereKey  :: String
   }
+  deriving (Show)
 
 type WhereMap = M.Map WhereIdentifier WhereProperties
 
@@ -155,30 +157,30 @@ instance FromJSON WhereIdProp where
 
 data WhereOverWhen = WhereOverWhen
   { wowWhere :: WhereIdentifier
-  , wowType :: EventType
+  , wowType  :: EventType
   }
 
 data WhereOverWhenIdx = WhereOverWhenIdx
-  { wowiWho :: Int
-  , wowiWhen :: Int
+  { wowiWho   :: Int
+  , wowiWhen  :: Int
   , wowiWhere :: Int
   , wowiEvent :: Int
-  , wowiType :: EventType
+  , wowiType  :: EventType
   }
 
 data PlotProperties = PlotProperties
-  { ppAxisColor :: String
-  , ppTop :: Int
-  , ppBottom :: Int
-  , ppLeft :: Int
-  , ppRight :: Int
-  , ppArrowGap :: Int
-  , ppGridW :: Int
+  { ppAxisColor  :: String
+  , ppTop        :: Int
+  , ppBottom     :: Int
+  , ppLeft       :: Int
+  , ppRight      :: Int
+  , ppArrowGap   :: Int
+  , ppGridW      :: Int
   , ppNameHeight :: Int
-  , ppNameEdge :: Int
-  , ppNameLen :: Int
-  , ppNameGap :: Int
-  , ppShow :: Bool
+  , ppNameEdge   :: Int
+  , ppNameLen    :: Int
+  , ppNameGap    :: Int
+  , ppShow       :: Bool
   }
 
 instance FromJSON PlotProperties where
@@ -198,10 +200,10 @@ instance FromJSON PlotProperties where
   parseJSON invalid    = typeMismatch "PlotProperties" invalid
 
 data Global = Global
-  { gWhoMap :: WhoMap
-  , gWhenMap :: WhenMap
+  { gWhoMap   :: WhoMap
+  , gWhenMap  :: WhenMap
   , gWhereMap :: WhereMap
-  , gEvents :: EventMap
+  , gEvents   :: EventMap
   }
 
 instance Default Global where
@@ -226,6 +228,13 @@ globalAddEvent e g = g { gEvents = M.insert (evWho e,evWhen e) (evWhere e) $ gEv
 
 renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> String
 renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
+
+renderWhereLabel :: Int -> Int -> [String] -> S.Svg
+renderWhereLabel _ _ [] = S.string ""
+renderWhereLabel _ _ [l] = S.string l
+renderWhereLabel xt textHeight ls = forM_ (zip ls [0..]) $ \(l,lno) -> do
+  S.tspan ! A.x (S.toValue $ show (xt - lno * textHeight) ++ "px" ) ! A.dy (if lno == 0 then "0" else "1.2em") $ S.string l
+
 
 toPlotSvg :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> S.Svg
 toPlotSvg pProp whoMap' whenMap' whereMap' events' =
@@ -312,7 +321,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
           ! A.textAnchor "end"
           ! A.dominantBaseline "middle"
           ! A.transform ( S.rotateAround (-45) xt yt)
-          $ S.string (whereName $ whereMap M.! kWhere)
+          $ renderWhereLabel xt lineWidth $ lines $ whereName $ whereMap M.! kWhere
 
       -- Event lines
       forM_ (zip whoKeys wowiByWho) $ \(kWho, wowiOfWho) ->
@@ -509,7 +518,7 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
     return old
 
 accuInt :: (Int,[Int]) -> Maybe (Int,(Int,[Int]))
-accuInt (_,[]) = Nothing
+accuInt (_,[])   = Nothing
 accuInt (s,a:as) = Just (s+a,(s+a,as))
 
 alterWho :: WhoIdentifier -> Maybe WhoProperties -> Maybe WhoProperties
@@ -523,6 +532,9 @@ alterWhen _ x = x
 alterWhere :: WhereIdentifier -> Maybe WhereProperties -> Maybe WhereProperties
 alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here, whereKey = here}
 alterWhere _ x = x
+
+ePutStrLn :: String -> IO ()
+ePutStrLn = SIO.hPutStrLn SIO.stderr
 
 processEvents :: IORef Global -> Block -> IO Block
 processEvents globalRef b@(CodeBlock (_,["narcha-event"],_) cont) =
