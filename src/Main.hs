@@ -327,6 +327,17 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
           ! A.transform ( S.rotateAround (-45) xt yt)
           $ renderWhereLabel xt lineWidth $ lines $ whereName $ whereMap M.! kWhere
 
+      -- Mark event columns
+      forM_ whenKeys $ \kWhen -> do
+        let x = left + whoNameSkip + (whenPos M.! kWhen) * gridW
+            y = top + (whereTotal - 1) * whoStep
+        S.path
+          ! A.stroke (S.toValue $ ppAxisColor pProp)
+          ! A.d (S.mkPath $ do
+            S.m x top
+            S.l x y
+            )
+
       -- Event lines
       forM_ (zip whoKeys wowiByWho) $ \(kWho, wowiOfWho) ->
         case wowiOfWho of
