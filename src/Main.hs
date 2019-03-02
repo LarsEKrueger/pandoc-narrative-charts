@@ -451,7 +451,9 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
   -- Maps updated with additional keys from events
   whoMap = foldl' (\m who -> M.alter (alterWho who) who m) whoMap' $ map evWho events
   whenMap = foldl' (\m when -> M.alter (alterWhen when) when m) whenMap' $ map evWhen events
-  whereMap = foldl' (\m here -> M.alter (alterWhere here) here m) whereMap' $ map evWhere events
+  -- Create missing where keys as numeric values in order of appearance (IooA)
+  whereKeysIooA = nubOrd $ map evWhere events
+  whereMap = foldl' (\m (here,nr) -> M.alter (alterWhereIooA here nr) here m) whereMap' $ zip whereKeysIooA [0..]
 
   -- Number of items along each dimension
   nWho = M.size whoMap
@@ -537,6 +539,11 @@ alterWhere :: WhereIdentifier -> Maybe WhereProperties -> Maybe WhereProperties
 alterWhere (WhereIdentifier here) Nothing = Just WhereProperties { whereName = here, whereKey = here}
 alterWhere _ x = x
 
+-- Alter function for M.alter, add a where entry with a numeric key
+alterWhereIooA :: WhereIdentifier -> Int -> Maybe WhereProperties -> Maybe WhereProperties
+alterWhereIooA (WhereIdentifier here) nr Nothing = Just $ WhereProperties { whereName = here, whereKey = printf "%03d" nr }
+alterWhereIooA _ _ x = x
+
 ePutStrLn :: String -> IO ()
 ePutStrLn = SIO.hPutStrLn SIO.stderr
 
@@ -586,6 +593,15 @@ takeUntil p (a:as) =
   if p a
      then [a]
      else a : takeUntil p as
+
+-- Return unique members of list in order of appearance
+-- From https://stackoverflow.com/questions/3098391/unique-elements-in-a-haskell-list
+nubOrd :: Ord a => [a] -> [a]
+nubOrd xs = go Set.empty xs where
+  go s (x:xs)
+   | x `Set.member` s = go s xs
+   | otherwise        = x : go (Set.insert x s) xs
+  go _ _              = []
 
 main :: IO ()
 main = do
