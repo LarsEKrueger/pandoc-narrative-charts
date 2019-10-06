@@ -57,6 +57,8 @@ newtype WhenIdentifier = WhenIdentifier String
   deriving (Eq, Ord, Show)
 newtype WhereIdentifier = WhereIdentifier String
   deriving (Eq, Ord, Show)
+newtype Tag = Tag String
+  deriving (Eq, Ord, Show)
 
 instance FromJSON WhoIdentifier where
   parseJSON (Y.String s) = WhoIdentifier <$> pure (T.unpack s)
@@ -70,15 +72,22 @@ instance FromJSON WhereIdentifier where
   parseJSON (Y.String s) = WhereIdentifier <$> pure (T.unpack s)
   parseJSON invalid      = typeMismatch "WhereIdentifier" invalid
 
+instance FromJSON Tag where
+  parseJSON (Y.String s) = Tag <$> pure (T.unpack s)
+  parseJSON invalid      = typeMismatch "Tag" invalid
+
 data EventType = VisibleEvent
                | InvisibleEvent
                | FrontEvent
   deriving (Eq)
 
+type TagList = [Tag]
+
 data StoryEvent = StoryEvent
   { evWho   :: WhoIdentifier
   , evWhen  :: WhenIdentifier
   , evWhere :: WhereIdentifier
+  , evTags  :: TagList
   }
   deriving (Eq, Show)
 
@@ -87,9 +96,10 @@ instance FromJSON StoryEvent where
     <$> v .: "who"
     <*> v .: "when"
     <*> v .: "where"
+    <*> v .:? "tags" .!= []
   parseJSON invalid    = typeMismatch "StoryEvent" invalid
 
-type EventMap = M.Map (WhenIdentifier,WhoIdentifier) WhereIdentifier
+type EventMap = M.Map (WhenIdentifier,WhoIdentifier) StoryEvent
 
 data WhoProperties = WhoProperties
   { whoName  :: String
@@ -183,6 +193,7 @@ data PlotProperties = PlotProperties
   , ppNameLen    :: Int
   , ppNameGap    :: Int
   , ppShow       :: Bool
+  , ppTags       :: TagList
   }
 
 instance FromJSON PlotProperties where
@@ -199,6 +210,7 @@ instance FromJSON PlotProperties where
     <*> v .:? "nameLen" .!= 50
     <*> v .:? "nameGap" .!= 1
     <*> v .:? "show" .!= True
+    <*> v .:? "tags" .!= []
   parseJSON invalid    = typeMismatch "PlotProperties" invalid
 
 data Global = Global
@@ -226,7 +238,7 @@ globalAddWhere :: WhereIdentifier -> WhereProperties -> Global -> Global
 globalAddWhere ident prop g = g { gWhereMap = M.insert ident prop $ gWhereMap g }
 
 globalAddEvent :: StoryEvent -> Global -> Global
-globalAddEvent e g = g { gEvents = M.insert (evWhen e,evWho e) (evWhere e) $ gEvents g }
+globalAddEvent e g = g { gEvents = M.insert (evWhen e,evWho e) e $ gEvents g }
 
 renderPlot :: PlotProperties -> WhoMap -> WhenMap -> WhereMap -> EventMap -> String
 renderPlot pProp whoMap whenMap whereMap events = R.renderSvg $ toPlotSvg pProp whoMap whenMap whereMap events
@@ -456,8 +468,13 @@ toPlotSvg pProp whoMap' whenMap' whereMap' events' =
 
   whenOfI i = left + whoNameSkip + gridW * i
 
+  tags = ppTags pProp
+
   -- Unique events
-  events = map (\((when,who),here) -> StoryEvent who when here) $ M.assocs events'
+  events = ( if [] == tags
+              then id
+              else filter (\e -> let ts = evTags e in ([] == ts) || any (\t -> elem t tags) ts)
+           ) $ map (\((when,who),e) -> e) $ M.assocs events'
 
   -- Maps updated with additional keys from events
   whoMap = foldl' (\m who -> M.alter (alterWho who) who m) whoMap' $ map evWho events

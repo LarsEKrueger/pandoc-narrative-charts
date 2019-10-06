@@ -175,6 +175,7 @@ The syntax of each element is as follows:
 who: <who-id>
 when: <when-id>
 where: <where-id>
+tags: <Comma-separated list of words, surrounded by square brackets>
 ```
 ~~~
 
@@ -183,6 +184,9 @@ strings that identify a character, a time, and a place this event will happen
 in the story.
 
 Events are unique. Mentioning the same event multiple times has no effect.
+
+Events can be tagged to exclude them from plots. If an event has no tag, it
+will shown in all plots.
 
 ## Characters: `narcha-who`
 
@@ -291,6 +295,7 @@ nameEdge: <integer>     [1]
 nameLen: <integer>      [50]
 nameGap: <integer>      [1]
 show: <boolean>         [yes]
+tags: <list of words>   []
 ```
 ~~~
 
@@ -317,6 +322,7 @@ meaning of these elements is:
 | nameLen    | Number of pixels, denoting the width of the character name box. The name will not be clipped.          |
 | nameGap    | Number of pixels between the box of the character name and the first event marker.                     |
 | show       | Should the plot be displayed. Use this to temporarily disable a plot.                                  |
+| tags       | List of tags to show. Empty list show all events.                                                      |
 
 # Possible improvements
 
@@ -334,6 +340,3 @@ meaning of these elements is:
     ```
 * Better parsing of integer keys, i.e. no more quotes.
 * Nicer curves on the first events
-* Generate multiple plots from the events, e.g. different levels of detail.
-  * tag events
-  * filter events by tags in plots
