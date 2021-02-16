@@ -37,6 +37,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.Map.Lazy                  as M
 import qualified Data.Set                       as Set
+import           Data.String
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import qualified Data.Vector.Unboxed.Mutable    as MV
@@ -577,42 +578,42 @@ ePutStrLn = SIO.hPutStrLn SIO.stderr
 
 processEvents :: IORef Global -> Block -> IO Block
 processEvents globalRef b@(CodeBlock (_,["narcha-event"],_) cont) =
-  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+  case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (e@StoryEvent{}) -> do
          modifyIORef' globalRef (globalAddEvent e)
          return Text.Pandoc.Definition.Null
-       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+       Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-where"],_) cont) =
-  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+  case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhereIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWhere id prop)
          return Text.Pandoc.Definition.Null
-       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+       Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-who"],_) cont) =
-  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+  case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhoIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWho id prop)
          return Text.Pandoc.Definition.Null
-       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+       Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-when"],_) cont) =
-  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+  case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhenIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWhen id prop)
          return Text.Pandoc.Definition.Null
-       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+       Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents _ b = return b
 
 processPlots :: IORef Global -> Block -> IO Block
 processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
-  case Y.decodeEither' $ T.encodeUtf8 $ T.pack cont of
+  case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (pp@PlotProperties{}) -> do
          global <- readIORef globalRef
          if ppShow pp
             then do
               let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
-              return $ RawBlock "HTML" svg
+              return $ RawBlock "HTML" $ fromString svg
             else return Text.Pandoc.Definition.Null
-       Left err -> return $ CodeBlock nullAttr $ "ERROR: " ++ Y.prettyPrintParseException err
+       Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
 
 takeUntil :: (a -> Bool) -> [a] -> [a]
