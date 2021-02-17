@@ -5,6 +5,29 @@ This module provides a filter for [pandoc](https://www.pandoc.org) to generate
 customized to a certain extent (e.g. colors, line widths). The story line of
 each character is routed automatically with respect to the other characters.
 
+## Installation
+
+This module is compatible with pandoc 2.11 and stack lts-17.4.
+
+### Prerequisistes
+
+* A working [Haskell installation](https://www.haskell.org/), either via
+  [cabal](https://www.haskell.org/downloads/#platform) or
+  [stack](https://www.haskell.org/downloads/#stack)
+
+### Build and install
+
+* Get the source code. Either
+  * clone this repository or
+  * download and extract the ZIP
+* Go to the source code directory
+* Run either
+  * `cabal install` or
+  * `stack init` followed by `stack install`
+
+The installation might take some time due to the size and number of
+dependencies.
+
 # Example
 
 The chart
