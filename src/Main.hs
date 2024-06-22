@@ -581,25 +581,25 @@ processEvents globalRef b@(CodeBlock (_,["narcha-event"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (e@StoryEvent{}) -> do
          modifyIORef' globalRef (globalAddEvent e)
-         return Text.Pandoc.Definition.Null
+         return $ Text.Pandoc.Definition.Plain $ [Text.Pandoc.Definition.Str ""]
        Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-where"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhereIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWhere id prop)
-         return Text.Pandoc.Definition.Null
+         return $ Text.Pandoc.Definition.Plain $ [Text.Pandoc.Definition.Str ""]
        Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-who"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhoIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWho id prop)
-         return Text.Pandoc.Definition.Null
+         return $ Text.Pandoc.Definition.Plain $ [Text.Pandoc.Definition.Str ""]
        Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents globalRef b@(CodeBlock (_,["narcha-when"],_) cont) =
   case Y.decodeEither' $ T.encodeUtf8 cont of
        Right (WhenIdProp id prop) -> do
          modifyIORef' globalRef (globalAddWhen id prop)
-         return Text.Pandoc.Definition.Null
+         return $ Text.Pandoc.Definition.Plain $ [Text.Pandoc.Definition.Str ""]
        Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processEvents _ b = return b
 
@@ -612,7 +612,7 @@ processPlots globalRef b@(CodeBlock (_,["narcha-plot"],_) cont) =
             then do
               let svg = renderPlot pp (gWhoMap global) (gWhenMap global) (gWhereMap global) (gEvents global)
               return $ RawBlock "HTML" $ fromString svg
-            else return Text.Pandoc.Definition.Null
+            else return $ Text.Pandoc.Definition.Plain $ [Text.Pandoc.Definition.Str ""]
        Left err -> return $ CodeBlock nullAttr $ fromString $ "ERROR: " ++ Y.prettyPrintParseException err
 processPlots _ b = return b
 

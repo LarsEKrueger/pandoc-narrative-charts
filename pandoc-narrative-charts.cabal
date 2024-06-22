@@ -1,5 +1,5 @@
 name:                pandoc-narrative-charts
-version:             0.2.0.0
+version:             0.2.1.0
 synopsis:            Pandoc filter to generate story narrative charts
 description:         Creates embedded svg from code blocks.
 license:             MIT
@@ -15,21 +15,21 @@ cabal-version:       >=1.10
 source-repository this
   type:     git
   location: https://github.com/LarsEKrueger/pandoc-narrative-charts.git
-  tag: v_0.2.0.0
+  tag: v_0.2.1.0
 
 executable pandoc-narrative-charts
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.5 && <5,
-                       pandoc-types == 1.22.*,
-                       bytestring == 0.10.*,
-                       aeson == 1.5.*,
+                       pandoc-types == 1.23.*,
+                       bytestring >= 0.10,
+                       aeson >= 1.5,
                        containers >= 0.5,
-                       blaze-svg == 0.3.*,
+                       blaze-svg >= 0.3,
                        blaze-markup >= 0.7,
-                       text == 1.2.*,
-                       data-default == 0.7.*,
+                       text >= 1.2,
+                       data-default >= 0.7,
                        yaml >= 0.8,
                        vector >= 0.11
   hs-source-dirs:      src
